@@ -1,0 +1,233 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Editor — My Workspace</title>
+<style>
+  :root{ --bg:#0b1020; --fg:#e6ebff; --muted:#9fb0d3; --card:#0f172a; --border:rgba(255,255,255,.08); --brand:#7aa2ff; --hover:rgba(122,162,255,.18) }
+  body{ margin:0; background:var(--bg); color:var(--fg); font:16px/1.6 ui-sans-serif,system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial }
+  .wrap{ max-width:1100px; margin:22px auto; padding:0 16px }
+  h1{ margin:0 0 8px }
+  .note{ color:var(--muted); margin-bottom:16px }
+  .card{ background:var(--card); border:1px solid var(--border); border-radius:14px; padding:16px; margin:14px 0 }
+  label{ display:block; font-size:13px; color:var(--muted); margin:8px 0 6px }
+  input[type=text], input[type=date], textarea{ width:100%; padding:10px 12px; border-radius:10px; border:1px solid var(--border); background:transparent; color:var(--fg) }
+  textarea{ min-height:160px; font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace }
+  .row{ display:flex; gap:12px; flex-wrap:wrap }
+  .col{ flex:1 1 260px }
+  .btn{ display:inline-flex; align-items:center; gap:8px; padding:10px 14px; border-radius:10px; border:1px solid var(--border); background:transparent; color:var(--fg); cursor:pointer; font-weight:700 }
+  .btn.primary{ background:var(--brand); color:#0b1020; border:0 }
+  .btn:disabled{ opacity:.6; cursor:not-allowed }
+  .file{ border:1px dashed var(--border); padding:10px; border-radius:10px }
+  .muted{ color:var(--muted); font-size:13px }
+  .grid{ display:grid; grid-template-columns: repeat(12,1fr); gap:12px }
+  .third{ grid-column: span 4 }
+  .half{ grid-column: span 6 }
+  .full{ grid-column: span 12 }
+  .list{ font-size:14px }
+  code{ background:#0e1633; padding:2px 6px; border-radius:6px }
+  a{ color:#a5b4fc }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>Editor</h1>
+  <p class="note">安全提示：此页面通过 <strong>GitHub REST API</strong> 直接向仓库写入。请使用 <em>有效期短、仅限该仓库、权限最小化</em> 的 Fine-grained PAT。不要将此页公开部署；建议仅你自己使用。</p>
+
+  <div class="card">
+    <h3>1) 登录（Editor）</h3>
+    <div class="row">
+      <div class="col"><label>Owner</label><input id="owner" type="text" placeholder="your-github-username" /></div>
+      <div class="col"><label>Repo</label><input id="repo" type="text" placeholder="your-repo" /></div>
+      <div class="col"><label>Base Branch</label><input id="branch" type="text" value="main" /></div>
+      <div class="col"><label>Token (Fine-grained PAT)</label><input id="token" type="text" placeholder="ghp_..." /></div>
+    </div>
+    <div style="margin-top:10px">
+      <button class="btn" id="saveCreds">Save locally</button>
+      <button class="btn" id="clearCreds">Clear</button>
+      <span class="muted">保存在 <code>localStorage</code>，仅此浏览器。</span>
+    </div>
+  </div>
+
+  <div class="card">
+    <h3>2) 新增文章</h3>
+    <div class="row">
+      <div class="col"><label>Title</label><input id="title" type="text" placeholder="My New Post" /></div>
+      <div class="col"><label>Primary Tag (目录)</label><input id="primaryTag" type="text" placeholder="tools" /></div>
+      <div class="col"><label>Other Tags (comma-separated)</label><input id="otherTags" type="text" placeholder="app, demo" /></div>
+      <div class="col"><label>Date</label><input id="date" type="date" /></div>
+    </div>
+    <label>Description</label>
+    <input id="desc" type="text" placeholder="Short description..." />
+    <div class="row">
+      <div class="col">
+        <label>Article HTML File</label>
+        <input id="file" type="file" class="file" accept=".html,.htm,.md" />
+        <div class="muted">建议上传 <code>.html</code> 文件；将被放在 <code>tags/&lt;primaryTag&gt;/&lt;slug&gt;.html</code></div>
+      </div>
+      <div class="col">
+        <label>Downloads (optional)</label>
+        <textarea id="downloads" placeholder='[{"label":"PDF","url":"downloads/xxx.pdf"}]'></textarea>
+      </div>
+    </div>
+    <div style="margin-top:10px">
+      <button class="btn primary" id="createPR">Create PR</button>
+      <span id="status" class="muted"></span>
+    </div>
+  </div>
+
+  <div class="card">
+    <h3>3) 当前 posts（读取 content.json）</h3>
+    <div id="posts" class="list muted">Load...</div>
+    <div style="margin-top:10px">
+      <button class="btn" id="refresh">Refresh</button>
+    </div>
+  </div>
+
+  <p class="muted">说明：点击 “Create PR” 将完成：新建分支 → 上传文章文件 → 更新 <code>data/content.json</code> → 提交 PR 到主分支。你在 GitHub 网页端审阅并合并即可。</p>
+
+</div>
+
+<script>
+const $ = (id)=>document.getElementById(id);
+const api = "https://api.github.com";
+
+// Creds persist
+(function initCreds(){
+  const creds = JSON.parse(localStorage.getItem('editor_creds')||'{}');
+  if (creds.owner) $('owner').value = creds.owner;
+  if (creds.repo) $('repo').value = creds.repo;
+  if (creds.branch) $('branch').value = creds.branch;
+  if (creds.token) $('token').value = creds.token;
+})();
+$('saveCreds').onclick = ()=>{
+  localStorage.setItem('editor_creds', JSON.stringify({
+    owner:$('owner').value.trim(),
+    repo:$('repo').value.trim(),
+    branch:$('branch').value.trim()||'main',
+    token:$('token').value.trim(),
+  }));
+  alert('Saved locally.');
+};
+$('clearCreds').onclick = ()=>{ localStorage.removeItem('editor_creds'); alert('Cleared.'); };
+
+// Util
+function b64(str){ return btoa(unescape(encodeURIComponent(str))); }
+function slug(s){
+  return s.toLowerCase().replace(/[^a-z0-9\u4e00-\u9fa5\s-]/g,'').trim().replace(/\s+/g,'-').slice(0,64) || 'post';
+}
+function headers(){ return { "Accept":"application/vnd.github+json", "Authorization":"Bearer "+$('token').value.trim(), "X-GitHub-Api-Version":"2022-11-28" }; }
+function setStatus(msg){ $('status').textContent = msg; }
+
+async function getRef(owner, repo, branch){
+  const r = await fetch(`${api}/repos/${owner}/${repo}/git/ref/heads/${branch}`, { headers: headers() });
+  if (!r.ok) throw new Error('getRef: '+r.status);
+  return r.json();
+}
+async function createRef(owner, repo, branch, sha){
+  const name = `editor-${Date.now()}`;
+  const r = await fetch(`${api}/repos/${owner}/${repo}/git/refs`, {
+    method:'POST', headers: headers(),
+    body: JSON.stringify({ ref:`refs/heads/${name}`, sha })
+  });
+  if (!r.ok) throw new Error('createRef: '+r.status+' '+(await r.text()));
+  return (await r.json()).ref.replace('refs/heads/','');
+}
+async function getContent(owner, repo, path, branch){
+  const r = await fetch(`${api}/repos/${owner}/${repo}/contents/${path}?ref=${branch}`, { headers: headers() });
+  if (r.status===404) return { sha:null, content:'' };
+  if (!r.ok) throw new Error('getContent: '+r.status);
+  const j = await r.json();
+  const content = j.content ? decodeURIComponent(escape(atob(j.content))) : '';
+  return { sha:j.sha, content };
+}
+async function putContent(owner, repo, path, branch, message, raw, sha=null){
+  const r = await fetch(`${api}/repos/${owner}/${repo}/contents/${path}`, {
+    method:'PUT', headers: headers(),
+    body: JSON.stringify({ message, content: b64(raw), branch, sha })
+  });
+  if (!r.ok) throw new Error('putContent: '+r.status+' '+(await r.text()));
+  return r.json();
+}
+async function createPR(owner, repo, head, base, title){
+  const r = await fetch(`${api}/repos/${owner}/${repo}/pulls`, {
+    method:'POST', headers: headers(),
+    body: JSON.stringify({ title, head, base, body:'Automated by Editor' })
+  });
+  if (!r.ok) throw new Error('createPR: '+r.status+' '+(await r.text()));
+  return r.json();
+}
+
+async function refreshPosts(){
+  try{
+    $('posts').textContent = 'Loading...';
+    const { owner, repo, branch } = JSON.parse(localStorage.getItem('editor_creds')||'{}');
+    if (!owner || !repo) { $('posts').textContent = 'Please save Owner/Repo first.'; return; }
+    const raw = await fetch(`https://raw.githubusercontent.com/${owner}/${repo}/${branch||'main'}/data/content.json`);
+    if (!raw.ok) { $('posts').textContent = 'Failed to load content.json'; return; }
+    const data = await raw.json();
+    const list = (data.posts||[]).map(p=>`• ${p.title}  [${(p.tags||[]).join(', ')}] → ${p.url}`).join('<br>');
+    $('posts').innerHTML = list || '<em>Empty</em>';
+  }catch(e){ $('posts').textContent = 'Error: '+e.message; }
+}
+$('refresh').onclick = refreshPosts;
+refreshPosts();
+
+$('createPR').onclick = async ()=>{
+  try{
+    setStatus('Checking inputs...');
+    const owner = $('owner').value.trim(), repo = $('repo').value.trim(), baseBranch= $('branch').value.trim()||'main';
+    const token = $('token').value.trim();
+    if (!owner || !repo || !token) throw new Error('Missing owner/repo/token');
+    const title = $('title').value.trim();
+    const primaryTag = $('primaryTag').value.trim();
+    const otherTags = $('otherTags').value.split(',').map(s=>s.trim()).filter(Boolean);
+    const desc = $('desc').value.trim();
+    const date = $('date').value || new Date().toISOString().slice(0,10);
+    const downloads = $('downloads').value.trim();
+    const file = $('file').files[0];
+    if (!title || !primaryTag || !file) throw new Error('Title/Primary Tag/File are required.');
+
+    // Branch
+    setStatus('Fetching base ref...');
+    const ref = await getRef(owner,repo,baseBranch);
+    setStatus('Creating branch...');
+    const newBranch = await createRef(owner,repo,baseBranch,ref.object.sha);
+
+    // Upload file into tags/<primaryTag>/<slug>.html
+    const slugged = slug(title) + (file.name.endsWith('.md')?'.md': (file.name.endsWith('.html')||file.name.endsWith('.htm'))?'':'.html');
+    const path = `tags/${primaryTag}/${slugged || file.name}`;
+    const fileText = await file.text();
+    setStatus('Uploading article...');
+    await putContent(owner,repo,path,newBranch,`Add article: ${title}`, fileText);
+
+    // Update data/content.json
+    setStatus('Updating content.json...');
+    const cont = await getContent(owner,repo,'data/content.json', newBranch);
+    let json = {};
+    try{ json = cont.content ? JSON.parse(cont.content) : {}; } catch(e){ json = {}; }
+    if (!json.site) json.site = {title:'My Workspace', subtitle:'Minimal personal toolkit', theme:'dark'};
+    if (!Array.isArray(json.posts)) json.posts = [];
+    const post = {
+      title, desc, url: path, tags: [primaryTag, ...otherTags], date
+    };
+    if (downloads) {
+      try { post.downloads = JSON.parse(downloads); } catch(e){ /* ignore */ }
+    }
+    json.posts.push(post);
+    await putContent(owner,repo,'data/content.json', newBranch, `Update content.json: add ${title}`, JSON.stringify(json, null, 2), cont.sha);
+
+    // Create PR
+    setStatus('Creating PR...');
+    const pr = await createPR(owner,repo,newBranch,baseBranch,`Add: ${title}`);
+    setStatus(`Done. PR → ${pr.html_url}`);
+    const a = document.createElement('a'); a.href = pr.html_url; a.textContent = 'Open Pull Request'; a.target = '_blank';
+    $('status').appendChild(document.createTextNode(' ')); $('status').appendChild(a);
+  }catch(e){
+    setStatus('Error: '+e.message);
+  }
+};
+</script>
+</body>
+</html>

@@ -1,0 +1,646 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Editor (Password-Gated) · My Workspace</title>
+<style>
+  :root{ --bg:#0b1020; --fg:#e6ebff; --muted:#9fb0d3; --card:#0f172a; --border:rgba(255,255,255,.08); --brand:#7aa2ff; --hover:rgba(122,162,255,.18) }
+  body{ margin:0; background:var(--bg); color:var(--fg); font:16px/1.6 ui-sans-serif,system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial }
+  .wrap{ max-width:1200px; margin:22px auto; padding:0 16px }
+  h1{ margin:0 0 8px }
+  .note{ color:var(--muted); margin-bottom:16px }
+  .card{ background:var(--card); border:1px solid var(--border); border-radius:14px; padding:16px; margin:14px 0 }
+  label{ display:block; font-size:13px; color:var(--muted); margin:8px 0 6px }
+  input[type=text], input[type=date], input[type=password], textarea, select{ width:100%; padding:10px 12px; border-radius:10px; border:1px solid var(--border); background:transparent; color:var(--fg) }
+  textarea{ min-height:120px; font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace }
+  .row{ display:flex; gap:12px; flex-wrap:wrap }
+  .col{ flex:1 1 260px }
+  .btn{ display:inline-flex; align-items:center; gap:8px; padding:10px 14px; border-radius:10px; border:1px solid var(--border); background:transparent; color:var(--fg); cursor:pointer; font-weight:700 }
+  .btn.primary{ background:var(--brand); color:#0b1020; border:0 }
+  .btn.danger{ border-color:#ef4444; color:#fecaca }
+  .btn:disabled{ opacity:.6; cursor:not-allowed }
+  .file{ border:1px dashed var(--border); padding:10px; border-radius:10px }
+  .muted{ color:var(--muted); font-size:13px }
+  .list{ font-size:14px }
+  code{ background:#0e1633; padding:2px 6px; border-radius:6px }
+  a{ color:#a5b4fc }
+  .hidden{ display:none }
+  .hr{height:1px;background:var(--border);margin:12px 0}
+</style>
+<!-- marked for Markdown conversion -->
+<script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+</head>
+<body>
+<div class="wrap">
+  <h1>Editor (Password-Gated)</h1>
+  <p class="note">登录后可新增、编辑（含移动/替换文件）、批量移动/重命名、删除、回滚 PR、草稿发布控制。所有更改以 Pull Request 形式提交。</p>
+
+  <!-- Login / Unlock -->
+  <div class="card" id="loginCard">
+    <h3>Unlock</h3>
+    <div class="row">
+      <div class="col"><label>Username</label><input id="user" type="text" placeholder="editor" /></div>
+      <div class="col"><label>Password</label><input id="pass" type="password" placeholder="••••••••" /></div>
+    </div>
+    <div style="margin-top:10px">
+      <button class="btn primary" id="unlock">Unlock</button>
+      <span id="lockStatus" class="muted"></span>
+    </div>
+    <details style="margin-top:12px">
+      <summary>⚙️ 管理说明</summary>
+      <p class="muted">
+        使用 <code>setup_encrypt.html</code> 生成密文（<code>salt</code>/<code>iv</code>/<code>data</code>），替换本页源码 <code>ENCRYPTED_SECRET</code>。<br>
+        PAT 使用 Fine-grained（仅此仓库、短期有效、Contents RW / PR RW）。<br>
+        页面不可公开给外部访客。
+      </p>
+      <label>（可选）覆盖内置密文 JSON</label>
+      <textarea id="secretOverride" placeholder='{"salt":"...","iv":"...","data":"..."}'></textarea>
+      <div style="margin-top:8px"><button class="btn" id="applySecret">Apply Secret JSON</button></div>
+    </details>
+  </div>
+
+  <!-- Repo config -->
+  <div class="card hidden" id="repoCard">
+    <h3>1) Repository</h3>
+    <div class="row">
+      <div class="col"><label>Owner</label><input id="owner" type="text" placeholder="your-github-username" /></div>
+      <div class="col"><label>Repo</label><input id="repo" type="text" placeholder="your-repo" /></div>
+      <div class="col"><label>Base Branch</label><input id="branch" type="text" value="main" /></div>
+    </div>
+    <div style="margin-top:10px">
+      <button class="btn" id="saveCreds">Save locally</button>
+      <button class="btn" id="clearCreds">Clear</button>
+      <button class="btn" id="logout">Lock</button>
+      <span class="muted">保存在本机 <code>localStorage</code>。</span>
+    </div>
+  </div>
+
+  <!-- Composer (Create) -->
+  <div class="card hidden" id="composeCard">
+    <h3>2) New Post</h3>
+    <div class="row">
+      <div class="col"><label>Title</label><input id="title" type="text" placeholder="My New Post" /></div>
+      <div class="col"><label>Primary Tag</label><input id="primaryTag" type="text" placeholder="tools" /></div>
+      <div class="col"><label>Other Tags (comma-separated)</label><input id="otherTags" type="text" placeholder="app, demo" /></div>
+      <div class="col"><label>Date</label><input id="date" type="date" /></div>
+    </div>
+    <label>Description</label>
+    <input id="desc" type="text" placeholder="Short description..." />
+    <div class="row">
+      <div class="col">
+        <label>Article File (.html / .md)</label>
+        <input id="file" type="file" class="file" accept=".html,.htm,.md" />
+        <div class="muted">默认将 Markdown 转为 HTML；也可保留 .md 并自动生成 HTML 查看页。</div>
+        <label><input type="checkbox" id="md_keep" /> Keep .md and auto-create an HTML viewer</label>
+      </div>
+      <div class="col">
+        <label>Downloads (optional)</label>
+        <textarea id="downloads" placeholder='[{"label":"PDF","url":"downloads/xxx.pdf"}]'></textarea>
+        <label><input type="checkbox" id="draft" /> Save as draft</label>
+      </div>
+    </div>
+    <div style="margin-top:10px">
+      <button class="btn primary" id="createPR">Create PR</button>
+      <span id="status" class="muted"></span>
+    </div>
+  </div>
+
+  <!-- Edit/Delete -->
+  <div class="card hidden" id="editCard">
+    <h3>3) Edit / Delete</h3>
+    <div class="row">
+      <div class="col"><label>Select Post</label><select id="postSelect"></select></div>
+      <div class="col"><button class="btn" id="loadPost">Load</button></div>
+      <div class="col"><button class="btn" id="refresh">Refresh List</button></div>
+    </div>
+    <div id="editForm" class="hidden">
+      <div class="hr"></div>
+      <div class="row">
+        <div class="col"><label>Title</label><input id="e_title" type="text" /></div>
+        <div class="col"><label>Primary Tag</label><input id="e_primaryTag" type="text" /></div>
+        <div class="col"><label>Other Tags (comma-separated)</label><input id="e_otherTags" type="text" /></div>
+        <div class="col"><label>Date</label><input id="e_date" type="date" /></div>
+      </div>
+      <label>Description</label>
+      <input id="e_desc" type="text" />
+      <div class="row">
+        <div class="col">
+          <label>Current Path (URL)</label>
+          <input id="e_url" type="text" readonly />
+          <label>Replace Article File (optional)</label>
+          <input id="e_file" type="file" class="file" accept=".html,.htm,.md" />
+          <label><input type="checkbox" id="e_md_keep" /> If .md uploaded: keep .md and create viewer</label>
+        </div>
+        <div class="col">
+          <label>Downloads (optional, JSON)</label>
+          <textarea id="e_downloads"></textarea>
+          <label><input type="checkbox" id="e_move" /> Move file to new path based on Title + Primary Tag</label>
+          <div class="muted">新路径：<code>tags/&lt;primaryTag&gt;/&lt;slug(title)&gt;.html</code> 或 <code>.md</code></div>
+          <label><input type="checkbox" id="e_draft" /> Draft</label>
+        </div>
+      </div>
+      <div style="margin-top:10px">
+        <button class="btn primary" id="updatePost">Update Post (PR)</button>
+        <button class="btn danger" id="deletePost">Delete Post (PR)</button>
+        <span id="estatus" class="muted"></span>
+      </div>
+    </div>
+    <div id="posts" class="list muted" style="margin-top:10px">Load...</div>
+  </div>
+
+  <!-- Batch move/rename -->
+  <div class="card hidden" id="batchCard">
+    <h3>4) Batch Move / Rename</h3>
+    <div class="row">
+      <div class="col"><label>Filter by tag (optional)</label><input id="b_filter_tag" type="text" placeholder="tools" /></div>
+      <div class="col"><label>Find (in Title)</label><input id="b_find" type="text" placeholder="old keyword" /></div>
+      <div class="col"><label>Replace (in Title)</label><input id="b_replace" type="text" placeholder="new keyword" /></div>
+      <div class="col"><label>New Primary Tag (optional)</label><input id="b_new_tag" type="text" placeholder="newtag" /></div>
+    </div>
+    <div style="margin-top:10px">
+      <button class="btn" id="b_preview">Preview selection</button>
+      <button class="btn primary" id="b_apply">Apply (PR)</button>
+      <span id="b_status" class="muted"></span>
+    </div>
+    <div class="hr"></div>
+    <div id="b_list" class="list muted"></div>
+  </div>
+
+  <!-- Revert PR -->
+  <div class="card hidden" id="revertCard">
+    <h3>5) Revert / Rollback</h3>
+    <div class="row">
+      <div class="col"><label>Pull Request Number</label><input id="rv_pr" type="text" placeholder="e.g. 12" /></div>
+      <div class="col"><label>Base Branch</label><input id="rv_base" type="text" value="main" /></div>
+    </div>
+    <div style="margin-top:10px">
+      <button class="btn danger" id="rv_btn">Create Revert PR</button>
+      <span id="rv_status" class="muted"></span>
+    </div>
+    <p class="muted">注：调用 GitHub “Revert a pull request” 接口。如仓库/权限不支持，将提示失败信息。</p>
+  </div>
+
+  <p class="muted">说明：所有操作均通过 GitHub API 完成：新建分支 → 变更文件 → 更新 <code>data/content.json</code> → 创建 PR。</p>
+</div>
+
+<script>
+// ========= Config: paste your encrypted secret here =========
+let ENCRYPTED_SECRET = {"salt":"", "iv":"", "data":""}; // Replace with setup_encrypt.html output
+// ===========================================================
+
+const api = "https://api.github.com";
+const $ = (id)=>document.getElementById(id);
+const enc = new TextEncoder(); const dec = new TextDecoder();
+let TOKEN = null;
+let POSTS = [];
+
+$('applySecret').onclick = ()=>{
+  try{ const obj = JSON.parse($('secretOverride').value);
+    if (obj && obj.salt && obj.iv && obj.data) { ENCRYPTED_SECRET = obj; alert('Applied.'); }
+    else alert('Invalid JSON');
+  }catch(e){ alert('Invalid JSON: '+e.message); }
+};
+
+async function deriveKey(username, password, saltB){
+  const material = await crypto.subtle.importKey('raw', enc.encode(username+':'+password), 'PBKDF2', false, ['deriveKey']);
+  return crypto.subtle.deriveKey({name:'PBKDF2', salt:saltB, iterations:200000, hash:'SHA-256'}, material, {name:'AES-GCM', length:256}, false, ['decrypt']);
+}
+function b64tob(bytes){ return Uint8Array.from(atob(bytes), c=>c.charCodeAt(0)); }
+function b64(str){ return btoa(unescape(encodeURIComponent(str))); }
+function slug(s){ return s.toLowerCase().replace(/[^a-z0-9\u4e00-\u9fa5\s-]/g,'').trim().replace(/\s+/g,'-').slice(0,64) || 'post'; }
+function headers(){ return { "Accept":"application/vnd.github+json", "Authorization":"Bearer "+TOKEN, "X-GitHub-Api-Version":"2022-11-28" }; }
+function setStatus(id, msg){ $(id).textContent = msg; }
+
+$('unlock').onclick = async ()=>{
+  setStatus('lockStatus','Unlocking...');
+  try{
+    const u = $('user').value.trim(), p = $('pass').value;
+    if (!u || !p) throw new Error('Missing username/password');
+    const salt = b64tob(ENCRYPTED_SECRET.salt), iv = b64tob(ENCRYPTED_SECRET.iv), data = b64tob(ENCRYPTED_SECRET.data);
+    const key = await deriveKey(u,p,salt);
+    const plain = await crypto.subtle.decrypt({name:'AES-GCM', iv}, key, data);
+    TOKEN = dec.decode(plain);
+    setStatus('lockStatus','Unlocked');
+    ['loginCard'].forEach(id=>$(id).classList.add('hidden'));
+    ['repoCard','composeCard','editCard','batchCard','revertCard'].forEach(id=>$(id).classList.remove('hidden'));
+    refreshPosts();
+  }catch(e){ setStatus('lockStatus','Failed: '+e.message); }
+};
+
+// Repo creds
+(function initCreds(){
+  const creds = JSON.parse(localStorage.getItem('editor_creds_psk')||'{}');
+  if (creds.owner) $('owner').value = creds.owner;
+  if (creds.repo) $('repo').value = creds.repo;
+  if (creds.branch) $('branch').value = creds.branch;
+})();
+$('saveCreds').onclick = ()=>{
+  localStorage.setItem('editor_creds_psk', JSON.stringify({
+    owner:$('owner').value.trim(), repo:$('repo').value.trim(), branch:$('branch').value.trim()||'main'
+  }));
+  alert('Saved locally.');
+};
+$('clearCreds').onclick = ()=>{ localStorage.removeItem('editor_creds_psk'); alert('Cleared.'); };
+$('logout').onclick = ()=>{ TOKEN=null; ['loginCard'].forEach(id=>$(id).classList.remove('hidden')); ['repoCard','composeCard','editCard','batchCard','revertCard'].forEach(id=>$(id).classList.add('hidden')); };
+
+// GitHub helpers
+async function getRef(owner, repo, branch){
+  const r = await fetch(`${api}/repos/${owner}/${repo}/git/ref/heads/${branch}`, { headers: headers() });
+  if (!r.ok) throw new Error('getRef: '+r.status);
+  return r.json();
+}
+async function createRef(owner, repo, branch, sha){
+  const name = `editor-${Date.now()}`;
+  const r = await fetch(`${api}/repos/${owner}/${repo}/git/refs`, { method:'POST', headers: headers(), body: JSON.stringify({ ref:`refs/heads/${name}`, sha }) });
+  if (!r.ok) throw new Error('createRef: '+r.status+' '+(await r.text()));
+  return (await r.json()).ref.replace('refs/heads/','');
+}
+async function getContent(owner, repo, path, branch){
+  const r = await fetch(`${api}/repos/${owner}/${repo}/contents/${path}?ref=${branch}`, { headers: headers() });
+  if (r.status===404) return { sha:null, content:'' };
+  if (!r.ok) throw new Error('getContent: '+r.status);
+  const j = await r.json();
+  const content = j.content ? decodeURIComponent(escape(atob(j.content))) : '';
+  return { sha:j.sha, content };
+}
+async function putContent(owner, repo, path, branch, message, raw, sha=null){
+  const r = await fetch(`${api}/repos/${owner}/${repo}/contents/${path}`, { method:'PUT', headers: headers(), body: JSON.stringify({ message, content: b64(raw), branch, sha }) });
+  if (!r.ok) throw new Error('putContent: '+r.status+' '+(await r.text()));
+  return r.json();
+}
+async function deleteContent(owner, repo, path, branch, message, sha){
+  const r = await fetch(`${api}/repos/${owner}/${repo}/contents/${path}`, { method:'DELETE', headers: headers(), body: JSON.stringify({ message, sha, branch }) });
+  if (!r.ok) throw new Error('deleteContent: '+r.status+' '+(await r.text()));
+  return r.json();
+}
+async function createPR(owner, repo, head, base, title, body='Automated by Editor'){
+  const r = await fetch(`${api}/repos/${owner}/${repo}/pulls`, { method:'POST', headers: headers(), body: JSON.stringify({ title, head, base, body }) });
+  if (!r.ok) throw new Error('createPR: '+r.status+' '+(await r.text()));
+  return r.json();
+}
+
+// Markdown helper: return (htmlContent, extension, maybeViewerHTML)
+function mdProcess(name, text, keepMd){
+  if (!/\.md$/i.test(name)) return { html: text, ext: null, viewer: null }; // it's HTML
+  if (keepMd){
+    // create a simple viewer HTML that fetches same-dir .md and renders via marked
+    const base = name.replace(/\.md$/i, '');
+    const viewer = `<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${base}</title><style>body{font:16px/1.7 ui-sans-serif,system-ui;padding:20px;max-width:860px;margin:auto}</style><script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script></head><body><div id="app">Loading…</div><script>(async()=>{const mdUrl=location.pathname.replace(/\\.html$/,'.md');const r=await fetch(mdUrl);const t=await r.text();document.getElementById('app').innerHTML=marked.parse(t);})();</script></body></html>`;
+    return { html: text, ext: '.md', viewer };
+  } else {
+    // convert md -> html immediately
+    const html = window.marked ? window.marked.parse(text) : text;
+    return { html, ext: '.html', viewer: null };
+  }
+}
+
+// Fetch posts list
+async function refreshPosts(){
+  try{
+    setStatus('posts','Loading...');
+    const { owner, repo, branch } = JSON.parse(localStorage.getItem('editor_creds_psk')||'{}');
+    if (!owner || !repo) { setStatus('posts','Please save Owner/Repo first.'); return; }
+    const raw = await fetch(`https://raw.githubusercontent.com/${owner}/${repo}/${branch||'main'}/data/content.json`);
+    if (!raw.ok) { setStatus('posts','Failed to load content.json'); return; }
+    const data = await raw.json();
+    POSTS = data.posts || [];
+    const sel = $('postSelect'); sel.innerHTML = '';
+    POSTS.forEach((p, idx)=>{
+      const opt = document.createElement('option'); opt.value = String(idx);
+      opt.textContent = `${p.title}  —  ${p.url}`;
+      sel.appendChild(opt);
+    });
+    $('posts').innerHTML = POSTS.map(p=>`• ${p.draft?'[draft] ':''}${p.title} [${(p.tags||[]).join(', ')}] → ${p.url}`).join('<br>') || '<em>Empty</em>';
+  }catch(e){ setStatus('posts','Error: '+e.message); }
+}
+$('refresh').onclick = refreshPosts;
+
+// Create new post
+$('createPR').onclick = async ()=>{
+  try{
+    setStatus('status','Checking inputs...');
+    const owner = $('owner').value.trim(), repo = $('repo').value.trim(), baseBranch= $('branch').value.trim()||'main';
+    if (!TOKEN) throw new Error('Locked. Please unlock first.');
+    if (!owner || !repo) throw new Error('Missing owner/repo');
+    const title = $('title').value.trim();
+    const primaryTag = $('primaryTag').value.trim();
+    const otherTags = $('otherTags').value.split(',').map(s=>s.trim()).filter(Boolean);
+    const desc = $('desc').value.trim();
+    const date = $('date').value || new Date().toISOString().slice(0,10);
+    const downloads = $('downloads').value.trim();
+    const isDraft = $('draft').checked;
+    const file = $('file').files[0];
+    const keepMd = $('md_keep').checked;
+    if (!title || !primaryTag || !file) throw new Error('Title/Primary Tag/File are required.');
+
+    const ref = await getRef(owner,repo,baseBranch);
+    setStatus('status','Creating branch...');
+    const newBranch = await createRef(owner,repo,baseBranch,ref.object.sha);
+
+    let path = '', viewerPath = null;
+    const baseSlug = slug(title);
+    const rawText = await file.text();
+    let payload = rawText;
+    if (/\.md$/i.test(file.name)){
+      const conv = mdProcess(file.name, rawText, keepMd);
+      if (conv.ext === '.md'){
+        // keep .md + create viewer
+        path = `tags/${primaryTag}/${baseSlug}.md`;
+        await putContent(owner,repo,path,newBranch,`Add article (md): ${title}`, conv.html);
+        // viewer
+        viewerPath = `tags/${primaryTag}/${baseSlug}.html`;
+        await putContent(owner,repo,viewerPath,newBranch,`Add md viewer: ${title}`, conv.viewer);
+      }else{
+        // converted to html
+        path = `tags/${primaryTag}/${baseSlug}.html`;
+        await putContent(owner,repo,path,newBranch,`Add article (html from md): ${title}`, conv.html);
+      }
+    } else {
+      path = `tags/${primaryTag}/${baseSlug}.html`;
+      await putContent(owner,repo,path,newBranch,`Add article: ${title}`, payload);
+    }
+
+    // Update content.json
+    setStatus('status','Updating content.json...');
+    const cont = await getContent(owner,repo,'data/content.json', newBranch);
+    let json = {}; try{ json = cont.content ? JSON.parse(cont.content) : {}; } catch(e){ json = {}; }
+    if (!json.site) json.site = {title:'My Workspace', subtitle:'Minimal personal toolkit', theme:'dark'};
+    if (!Array.isArray(json.posts)) json.posts = [];
+    const urlToUse = viewerPath || path;
+    const post = { title, desc, url: urlToUse, tags: [primaryTag, ...otherTags], date, draft: !!isDraft };
+    if (downloads) { try { post.downloads = JSON.parse(downloads); } catch(e){} }
+    json.posts.push(post);
+    await putContent(owner,repo,'data/content.json', newBranch, `Update content.json: add ${title}`, JSON.stringify(json, null, 2), cont.sha);
+
+    setStatus('status','Creating PR...');
+    const pr = await createPR(owner,repo,newBranch,baseBranch,`Add: ${title}`);
+    setStatus('status',`Done. PR → ${pr.html_url}`);
+    const a = document.createElement('a'); a.href = pr.html_url; a.textContent = 'Open Pull Request'; a.target = '_blank';
+    $('status').appendChild(document.createTextNode(' ')); $('status').appendChild(a);
+  }catch(e){ setStatus('status','Error: '+e.message); }
+};
+
+// Load one post into edit form
+$('loadPost').onclick = ()=>{
+  const idx = Number($('postSelect').value);
+  if (!Number.isFinite(idx) || !POSTS[idx]) return;
+  const p = POSTS[idx];
+  $('editForm').classList.remove('hidden');
+  $('e_title').value = p.title || '';
+  $('e_desc').value = p.desc || '';
+  $('e_date').value = (p.date||'').slice(0,10);
+  const tags = p.tags || [];
+  $('e_primaryTag').value = tags[0] || '';
+  $('e_otherTags').value = (tags.slice(1)||[]).join(', ');
+  $('e_url').value = p.url || '';
+  $('e_downloads').value = JSON.stringify(p.downloads||[], null, 2);
+  $('e_draft').checked = !!p.draft;
+  $('e_move').checked = false;
+  setStatus('estatus','');
+};
+
+// Update post
+$('updatePost').onclick = async ()=>{
+  try{
+    setStatus('estatus','Checking inputs...');
+    const owner = $('owner').value.trim(), repo = $('repo').value.trim(), baseBranch= $('branch').value.trim()||'main';
+    if (!TOKEN) throw new Error('Locked. Please unlock first.');
+    if (!owner || !repo) throw new Error('Missing owner/repo');
+    const idx = Number($('postSelect').value); if (!POSTS[idx]) throw new Error('No post selected');
+    const original = POSTS[idx];
+
+    const title = $('e_title').value.trim();
+    const primaryTag = $('e_primaryTag').value.trim();
+    const otherTags = $('e_otherTags').value.split(',').map(s=>s.trim()).filter(Boolean);
+    const desc = $('e_desc').value.trim();
+    const date = $('e_date').value || original.date || new Date().toISOString().slice(0,10);
+    const downloadsRaw = $('e_downloads').value.trim();
+    const doMove = $('e_move').checked;
+    const isDraft = $('e_draft').checked;
+    const file = $('e_file').files[0];
+    const keepMd = $('e_md_keep').checked;
+
+    const ref = await getRef(owner,repo,baseBranch);
+    setStatus('estatus','Creating branch...');
+    const newBranch = await createRef(owner,repo,baseBranch,ref.object.sha);
+
+    let newPath = original.url;
+    let contentText = null;
+    let useHtmlViewer = false;
+
+    // If replacing file or moving, we need source content
+    if (!file && doMove){
+      const cur = await getContent(owner,repo,original.url, baseBranch);
+      if (!cur.sha) throw new Error('Cannot read original file for move.');
+      contentText = cur.content;
+    }
+    if (file){
+      const raw = await file.text();
+      if (/\.md$/i.test(file.name)){
+        const conv = mdProcess(file.name, raw, keepMd);
+        if (conv.ext === '.md'){
+          contentText = conv.html; // still md text
+          useHtmlViewer = true;
+        } else {
+          contentText = conv.html; // converted html
+        }
+      } else {
+        contentText = raw;
+      }
+    }
+
+    // Compute new path if move
+    if (doMove){
+      const ext = (/\.md$/i.test(original.url) || original.url.endsWith('.md')) ? '.md' : '.html';
+      const baseSlug = slug(title);
+      if (useHtmlViewer) {
+        // When keeping md, we move to .md + create viewer .html
+        newPath = `tags/${primaryTag}/${baseSlug}.md`;
+      } else {
+        newPath = `tags/${primaryTag}/${baseSlug}${ext}`;
+      }
+      // write new path (contentText must be ready)
+      setStatus('estatus','Writing new path...');
+      await putContent(owner,repo,newPath,newBranch,`Update article file: ${title}`, contentText || '');
+      // delete old path
+      const oldMeta = await getContent(owner,repo,original.url, baseBranch);
+      if (oldMeta.sha){
+        setStatus('estatus','Deleting old path...');
+        await deleteContent(owner,repo,original.url,newBranch,`Remove old path for ${title}`, oldMeta.sha);
+      }
+      // possibly add viewer for md
+      if (useHtmlViewer){
+        const viewerPath = newPath.replace(/\.md$/i, '.html');
+        const viewer = `<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${title}</title><style>body{font:16px/1.7 ui-sans-serif,system-ui;padding:20px;max-width:860px;margin:auto}</style><script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script></head><body><div id="app">Loading…</div><script>(async()=>{const mdUrl=location.pathname.replace(/\\.html$/,'.md');const r=await fetch(mdUrl);const t=await r.text();document.getElementById('app').innerHTML=marked.parse(t);})();</script></body></html>`;
+        await putContent(owner,repo,viewerPath,newBranch,`Add md viewer: ${title}`, viewer);
+        newPath = viewerPath; // content.json should point to viewer
+      }
+    } else if (file){
+      // replace in place
+      const cur = await getContent(owner,repo,original.url, baseBranch);
+      setStatus('estatus','Replacing file content...');
+      await putContent(owner,repo,original.url,newBranch,`Replace article file: ${title}`, contentText, cur.sha);
+      // if we kept md, ensure viewer exists at same base name
+      if (useHtmlViewer){
+        const viewerPath = original.url.replace(/\.md$/i, '.html');
+        const viewer = `<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${title}</title><style>body{font:16px/1.7 ui-sans-serif,system-ui;padding:20px;max-width:860px;margin:auto}</style><script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script></head><body><div id="app">Loading…</div><script>(async()=>{const mdUrl=location.pathname.replace(/\\.html$/,'.md');const r=await fetch(mdUrl);const t=await r.text();document.getElementById('app').innerHTML=marked.parse(t);})();</script></body></html>`;
+        await putContent(owner,repo,viewerPath,newBranch,`Ensure md viewer: ${title}`, viewer);
+        newPath = viewerPath;
+      }
+    }
+
+    // update content.json
+    setStatus('estatus','Updating content.json...');
+    const cont = await getContent(owner,repo,'data/content.json', newBranch);
+    let json = {}; try{ json = cont.content ? JSON.parse(cont.content) : {}; } catch(e){ json = {}; }
+    if (!Array.isArray(json.posts)) json.posts = [];
+    const updated = json.posts.map(p=>{
+      if (p.url === original.url && p.title === original.title){
+        const np = { title, desc, url: newPath, tags: [primaryTag, ...otherTags], date, draft: !!isDraft };
+        if (downloadsRaw) { try{ np.downloads = JSON.parse(downloadsRaw); }catch(e){} }
+        return np;
+      }
+      return p;
+    });
+    json.posts = updated;
+    await putContent(owner,repo,'data/content.json', newBranch, `Edit post: ${title}`, JSON.stringify(json, null, 2), cont.sha);
+
+    setStatus('estatus','Creating PR...');
+    const pr = await createPR(owner,repo,newBranch,baseBranch,`Edit: ${title}`);
+    setStatus('estatus',`Done. PR → ${pr.html_url}`);
+    const a = document.createElement('a'); a.href = pr.html_url; a.textContent = 'Open Pull Request'; a.target = '_blank';
+    $('estatus').appendChild(document.createTextNode(' ')); $('estatus').appendChild(a);
+  }catch(e){ setStatus('estatus','Error: '+e.message); }
+};
+
+// Delete post
+$('deletePost').onclick = async ()=>{
+  if (!confirm('Are you sure? This will remove the file and the post entry via a PR.')) return;
+  try{
+    setStatus('estatus','Working...');
+    const owner = $('owner').value.trim(), repo = $('repo').value.trim(), baseBranch= $('branch').value.trim()||'main';
+    if (!TOKEN) throw new Error('Locked. Please unlock first.');
+    if (!owner || !repo) throw new Error('Missing owner/repo');
+    const idx = Number($('postSelect').value); if (!POSTS[idx]) throw new Error('No post selected');
+    const p = POSTS[idx];
+
+    const ref = await getRef(owner,repo,baseBranch);
+    const newBranch = await createRef(owner,repo,baseBranch,ref.object.sha);
+
+    const meta = await getContent(owner,repo,p.url, baseBranch);
+    if (meta.sha) await deleteContent(owner,repo,p.url,newBranch,`Delete article: ${p.title}`, meta.sha);
+
+    const cont = await getContent(owner,repo,'data/content.json', newBranch);
+    let json = {}; try{ json = cont.content ? JSON.parse(cont.content) : {}; } catch(e){ json = {}; }
+    if (!Array.isArray(json.posts)) json.posts = [];
+    json.posts = json.posts.filter(x => !(x.url === p.url && x.title === p.title));
+    await putContent(owner,repo,'data/content.json', newBranch, `Remove post: ${p.title}`, JSON.stringify(json, null, 2), cont.sha);
+
+    const pr = await createPR(owner,repo,newBranch,baseBranch,`Delete: ${p.title}`);
+    setStatus('estatus',`Done. PR → ${pr.html_url}`);
+    const a = document.createElement('a'); a.href = pr.html_url; a.textContent = 'Open Pull Request'; a.target = '_blank';
+    $('estatus').appendChild(document.createTextNode(' ')); $('estatus').appendChild(a);
+  }catch(e){ setStatus('estatus','Error: '+e.message); }
+};
+
+// Batch preview
+$('b_preview').onclick = ()=>{
+  const ftag = $('b_filter_tag').value.trim().toLowerCase();
+  const find = $('b_find').value; const repl = $('b_replace').value;
+  const newTag = $('b_new_tag').value.trim();
+  const cand = POSTS.filter(p => !ftag || (p.tags||[]).map(t=>t.toLowerCase()).includes(ftag));
+  const lines = cand.map(p => {
+    const oldTitle = p.title;
+    const newTitle = find ? oldTitle.replaceAll(find, repl) : oldTitle;
+    const primary = (p.tags||[])[0] || '';
+    const targetTag = newTag || primary;
+    const ext = p.url.endsWith('.md')?'.md':'.html';
+    const newPath = `tags/${targetTag}/${slug(newTitle)}${ext}`;
+    return `• ${oldTitle}  →  ${newTitle}   | ${p.url}  →  ${newPath}`;
+  });
+  $('b_list').innerHTML = lines.join('<br>') || '<em>No matched posts.</em>';
+};
+
+// Batch apply
+$('b_apply').onclick = async ()=>{
+  try{
+    setStatus('b_status','Preparing...');
+    const owner = $('owner').value.trim(), repo = $('repo').value.trim(), baseBranch= $('branch').value.trim()||'main';
+    if (!TOKEN) throw new Error('Locked. Please unlock first.');
+    if (!owner || !repo) throw new Error('Missing owner/repo');
+
+    const ftag = $('b_filter_tag').value.trim().toLowerCase();
+    const find = $('b_find').value; const repl = $('b_replace').value;
+    const newTag = $('b_new_tag').value.trim();
+
+    const ref = await getRef(owner,repo,baseBranch);
+    const newBranch = await createRef(owner,repo,baseBranch,ref.object.sha);
+
+    const candIdx = POSTS.map((p,i)=>({p,i})).filter(x => !ftag || (x.p.tags||[]).map(t=>t.toLowerCase()).includes(ftag));
+
+    for (const {p,i} of candIdx){
+      const oldMeta = await getContent(owner,repo,p.url, baseBranch);
+      if (!oldMeta.sha) continue;
+      const oldTitle = p.title;
+      const newTitle = find ? oldTitle.replaceAll(find, repl) : oldTitle;
+      const primary = (p.tags||[])[0] || '';
+      const targetTag = newTag || primary;
+      const ext = p.url.endsWith('.md')?'.md':'.html';
+      const newPath = `tags/${targetTag}/${slug(newTitle)}${ext}`;
+
+      // write new path
+      await putContent(owner,repo,newPath,newBranch,`Batch move: ${oldTitle} -> ${newTitle}`, oldMeta.content);
+      // delete old
+      await deleteContent(owner,repo,p.url,newBranch,`Batch remove old path for ${oldTitle}`, oldMeta.sha);
+
+      // update post entry in memory
+      POSTS[i] = { ...p, title:newTitle, url:newPath, tags: [targetTag, ...(p.tags||[]).slice(1)] };
+    }
+
+    // update content.json
+    const cont = await getContent(owner,repo,'data/content.json', newBranch);
+    let json = {}; try{ json = cont.content ? JSON.parse(cont.content) : {}; } catch(e){ json = {}; }
+    if (!Array.isArray(json.posts)) json.posts = [];
+    // naive replace by matching old url/title pairs
+    json.posts = json.posts.map(old => {
+      const match = POSTS.find(p => p.title===old.title && p.url===old.url) || json.posts.find(()=>false);
+      const newer = POSTS.find(p => p.title===old.title && p.url===old.url); // none
+      // Better: match by original URL snapshot: but we mutated POSTS; keep a map in future.
+      return old;
+    });
+    // Simpler: replace whole list with in-memory POSTS (safe when single editor)
+    json.posts = POSTS;
+    await putContent(owner,repo,'data/content.json', newBranch, `Batch update posts`, JSON.stringify(json, null, 2), cont.sha);
+
+    const pr = await createPR(owner,repo,newBranch,baseBranch,`Batch move/rename`);
+    setStatus('b_status',`Done. PR → ${pr.html_url}`);
+    const a = document.createElement('a'); a.href = pr.html_url; a.textContent = 'Open Pull Request'; a.target = '_blank';
+    $('b_status').appendChild(document.createTextNode(' ')); $('b_status').appendChild(a);
+  }catch(e){ setStatus('b_status','Error: '+e.message); }
+};
+
+// Revert PR (GitHub endpoint; may fail if not supported)
+$('rv_btn').onclick = async ()=>{
+  try{
+    setStatus('rv_status','Requesting revert...');
+    const owner = $('owner').value.trim(), repo = $('repo').value.trim();
+    const prNum = $('rv_pr').value.trim();
+    const base = $('rv_base').value.trim()||'main';
+    if (!TOKEN) throw new Error('Locked. Please unlock first.');
+    if (!owner || !repo || !prNum) throw new Error('Missing owner/repo/pr number');
+    const r = await fetch(`${api}/repos/${owner}/${repo}/pulls/${prNum}/revert`, {
+      method:'POST', headers: headers(), body: JSON.stringify({ body: 'Automated revert', do_not_create_merge_commit: false, target_branch: base })
+    });
+    if (!r.ok){
+      const msg = await r.text();
+      throw new Error('Revert API failed: '+msg);
+    }
+    const data = await r.json();
+    setStatus('rv_status',`Revert PR created → ${data.html_url || ''}`);
+  }catch(e){ setStatus('rv_status','Error: '+e.message+' (Your repo may not support Revert API; consider manual revert.)'); }
+};
+
+</script>
+</body>
+</html>
