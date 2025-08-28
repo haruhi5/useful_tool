@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Spin Wheel (URL Sync, Stable)</title>
+<title>Spin Wheel (URL Sync, Physics)</title>
 <style>
   :root{
     --bg:#0b1020; --panel:#0f172a; --fg:#e6ebff; --muted:#9fb0d3; --brand:#7aa2ff; --border:rgba(255,255,255,.08);
@@ -19,7 +19,14 @@
   .canvasWrap{position:relative;max-width:640px;margin:0 auto}
   .canvasWrap::before{content:"";display:block;padding-top:100%}
   .canvasWrap > canvas{position:absolute;inset:0;width:100%;height:100%}
-  .pointer{position:absolute;left:50%;top:-2px;transform:translateX(-50%);width:0;height:0;border-left:14px solid transparent;border-right:14px solid transparent;border-bottom:24px solid #ffd166;filter:drop-shadow(0 2px 4px rgba(0,0,0,.4))}
+.pointer{
+  position:absolute;left:50%;top:-2px;transform:translateX(-50%);
+  width:0;height:0;
+  border-left:14px solid transparent;
+  border-right:14px solid transparent;
+  border-top:24px solid #ffd166;
+  z-index:10;
+}
   .controls{display:flex;gap:10px;flex-wrap:wrap;justify-content:center;margin-top:12px}
   button{cursor:pointer;border-radius:12px;border:1px solid var(--border);padding:10px 14px;background:transparent;color:var(--fg);font-weight:700}
   button.primary{background:var(--brand);border:0;color:#081127}
@@ -94,7 +101,7 @@
 <div id="err"></div>
 
 <script>
-/* ===== basic error surface ===== */
+/* ===== error surface ===== */
 (function(){
   function showErr(msg){ var el=document.getElementById('err'); el.style.display='block'; el.textContent=msg; }
   window.addEventListener('error', function(e){ showErr('Error: '+e.message); });
@@ -149,7 +156,7 @@ function setState(s){
   }catch(e){ var er=document.getElementById('err'); er.style.display='block'; er.textContent='setState error: '+e.message; }
 }
 
-/* ===== UI: list panel ===== */
+/* ===== UI list ===== */
 function renderList(){
   var wrap = $('#list'); wrap.innerHTML='';
   for (var idx=0; idx<state.options.length; idx++){
@@ -202,7 +209,7 @@ function wrapText(ctx, text, r, lineH, maxLines){
   }
 }
 
-/* ===== robust arcs + spin ===== */
+/* ===== arcs + physics spin ===== */
 var ARCS = []; // [{start,end,text,weight}]
 var spinning=false, currentAngle=0;
 
@@ -262,7 +269,6 @@ function drawWheel(angle){
 }
 
 function normalizeAngle(a){ a%=TAU; if(a<0) a+=TAU; return a; }
-function easeOutCubic(x){ return 1 - Math.pow(1 - x, 3); }
 
 function findArcUnderPointer(finalAngle){
   // pointer → top. After rotation by finalAngle, pointer maps to wheel angle:
@@ -295,40 +301,54 @@ function pickWeightedText(){
   return c[c.length-1].text;
 }
 
+/* --- physics spin: θ(t)=θ0 + ω0 t − 0.5 α t^2, stop at t=T (ω=0) --- */
 function spinOnce(){
   if (spinning) return;
 
   recomputeArcs();
   if (!ARCS.length){ shake($('#spinBtn')); return; }
 
+  // 1) choose winner (respect weight + recent rule)
   var winnerText = pickWeightedText();
   if (!winnerText){ shake($('#spinBtn')); return; }
 
-  var targetArc = null;
-  for (var i=0;i<ARCS.length;i++){ if (ARCS[i].text === winnerText){ targetArc = ARCS[i]; break; } }
-  if (!targetArc){ targetArc = ARCS[0]; }
+  // 2) pick target segment and a point INSIDE the segment (avoid border)
+  var seg=null, i;
+  for (i=0;i<ARCS.length;i++){ if (ARCS[i].text===winnerText){ seg=ARCS[i]; break; } }
+  if(!seg) seg = ARCS[0];
+  var span = seg.end - seg.start;
+  var margin = Math.min(0.2, span*0.2);               // keep 60%–80% inner area
+  var targetAngle = seg.start + margin + Math.random()*(span - 2*margin);
+  var desired = (Math.PI*1.5 - targetAngle);          // final wheel rotation so pointer hits target
+  var base = normalizeAngle(desired - currentAngle);  // minimal positive rotation to target
 
-  var mid = (targetArc.start + targetArc.end)/2;
-  var turns = 5 + Math.random()*2;
-  var desired = (Math.PI*1.5 - mid);
-  var finalAngle = TAU*turns + desired;
+  // 3) guarantee at least a few full circles (randomized)
+  var minTurns = 3;                                   // ≥ 3 full circles
+  var extraTurns = Math.floor(Math.random()*3);       // +0..2
+  var deltaTheta = base + (minTurns + extraTurns)*TAU;
+
+  // 4) choose a realistic duration randomly (2.8s ~ 4.5s)
+  var T = (2800 + Math.random()*1700) / 1000;         // seconds
+
+  // 5) solve physics: Δθ = 0.5 α T^2  =>  α = 2Δθ/T^2,  ω0 = α T
+  var alpha = 2*deltaTheta / (T*T);
+  var omega0 = alpha * T;
+
+  // 6) animate
   var startA = currentAngle;
-  var delta = normalizeAngle(finalAngle - startA);
+  var t0 = (performance && performance.now) ? performance.now() : Date.now();
+  var durMs = T*1000;
 
   spinning = true; $('#spinBtn').disabled=true; $('#result').textContent='Spinning...';
-  var dur = 2800 + Math.random()*900;
-  var t0 = (performance && performance.now) ? performance.now() : Date.now();
 
   function step(now){
     now = (typeof now==='number') ? now : ((performance && performance.now) ? performance.now() : Date.now());
-    var p = Math.min(1, (now - t0)/dur);
-    var eased = easeOutCubic(p);
-    currentAngle = startA + delta*eased;
-    drawWheel(currentAngle);
-    if (p < 1) { requestAnimationFrame(step); }
-    else {
+    var elapsed = (now - t0)/1000;  // s
+    if (elapsed >= T){
+      currentAngle = startA + deltaTheta; // snap exact
+      drawWheel(currentAngle);
       spinning=false; $('#spinBtn').disabled=false;
-      var finalSeg = findArcUnderPointer(currentAngle) || targetArc;
+      var finalSeg = findArcUnderPointer(currentAngle) || seg;
       var text = finalSeg.text;
       if (state.recentLimit>0){
         state.history.push(text);
@@ -338,7 +358,12 @@ function spinOnce(){
       }
       $('#result').textContent = '🎯 ' + text;
       notify();
+      return;
     }
+    var theta = startA + (omega0*elapsed) - 0.5*alpha*elapsed*elapsed;
+    currentAngle = theta;
+    drawWheel(currentAngle);
+    requestAnimationFrame(step);
   }
   requestAnimationFrame(step);
 }
@@ -481,7 +506,7 @@ var UrlSync = (function(){
   return { read:read, write:write };
 })();
 
-/* ===== wire up URL sync + init ===== */
+/* ===== wire up + init ===== */
 (function(){
   var incoming = UrlSync.read();
   if (incoming) setState(incoming); else setState(state);
@@ -508,6 +533,7 @@ var UrlSync = (function(){
   document.getElementById('recentN').value=state.recentLimit;
   updateStat();
 })();
+
 </script>
 </body>
 </html>
