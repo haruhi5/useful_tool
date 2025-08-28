@@ -1,6 +1,13 @@
 title: useful_tool
 tagline: Handy web tools
 url: https://haruhi5.github.io
-baseurl: "/useful_tool" # <— project repo (critical)
-lang: en
-timezone: Asia/Singapore
+baseurl: "/useful_tool" # <- project site path (critical)
+
+theme: jekyll-theme-chirpy # <- THIS turns on Chirpy's layouts
+
+plugins:
+  - jekyll-archives
+  - jekyll-paginate
+  - jekyll-seo-tag
+  - jekyll-sitemap
+  - jekyll-include-cache

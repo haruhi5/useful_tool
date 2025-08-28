@@ -1,55 +1,145 @@
-<!doctype html>
+---
+layout: null
+---
+
+<!DOCTYPE html>
 <html lang="en">
-<head>
-<meta charset="utf-8" />
-<meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>Setup · Encrypt PAT</title>
-<style>
-  body{ margin:0; font:16px/1.6 ui-sans-serif,system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial; background:#0b1020; color:#e6ebff }
-  .wrap{ max-width:860px; margin:22px auto; padding:0 16px }
-  .card{ background:#0f172a; border:1px solid rgba(255,255,255,.08); border-radius:14px; padding:16px; margin:14px 0 }
-  label{ display:block; font-size:13px; opacity:.85; margin:8px 0 6px }
-  input, textarea{ width:100%; padding:10px 12px; border-radius:10px; border:1px solid rgba(255,255,255,.08); background:transparent; color:#e6ebff }
-  textarea{ min-height:120px; font-family: ui-monospace, Menlo, Consolas, monospace }
-  .btn{ display:inline-flex; align-items:center; gap:8px; padding:10px 14px; border-radius:10px; border:1px solid rgba(255,255,255,.12); background:transparent; color:#e6ebff; cursor:pointer; font-weight:700 }
-  .note{ color:#9fb0d3; font-size:14px }
-  code{ background:#0e1633; padding:2px 6px; border-radius:6px }
-</style>
-</head>
-<body>
-<div class="wrap">
-  <h1>Encrypt a Fine-grained PAT</h1>
-  <p class="note">此工具在浏览器本地运行，不会发网。使用 <strong>PBKDF2-SHA256(200k)</strong> + <strong>AES‑GCM(256)</strong>。记住你的 <code>username:password</code>，否则将无法解密。</p>
-  <div class="card">
-    <label>Username</label><input id="user" placeholder="editor" />
-    <label>Password</label><input id="pass" type="password" placeholder="strong password" />
-    <label>Fine-grained PAT</label><input id="pat" placeholder="ghp_..." />
-    <div style="margin-top:10px">
-      <button id="encBtn" class="btn">Encrypt</button>
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Setup · Encrypt PAT</title>
+    <style>
+      body {
+        margin: 0;
+        font: 16px/1.6 ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto,
+          Helvetica, Arial;
+        background: #0b1020;
+        color: #e6ebff;
+      }
+      .wrap {
+        max-width: 860px;
+        margin: 22px auto;
+        padding: 0 16px;
+      }
+      .card {
+        background: #0f172a;
+        border: 1px solid rgba(255, 255, 255, 0.08);
+        border-radius: 14px;
+        padding: 16px;
+        margin: 14px 0;
+      }
+      label {
+        display: block;
+        font-size: 13px;
+        opacity: 0.85;
+        margin: 8px 0 6px;
+      }
+      input,
+      textarea {
+        width: 100%;
+        padding: 10px 12px;
+        border-radius: 10px;
+        border: 1px solid rgba(255, 255, 255, 0.08);
+        background: transparent;
+        color: #e6ebff;
+      }
+      textarea {
+        min-height: 120px;
+        font-family: ui-monospace, Menlo, Consolas, monospace;
+      }
+      .btn {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        padding: 10px 14px;
+        border-radius: 10px;
+        border: 1px solid rgba(255, 255, 255, 0.12);
+        background: transparent;
+        color: #e6ebff;
+        cursor: pointer;
+        font-weight: 700;
+      }
+      .note {
+        color: #9fb0d3;
+        font-size: 14px;
+      }
+      code {
+        background: #0e1633;
+        padding: 2px 6px;
+        border-radius: 6px;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="wrap">
+      <h1>Encrypt a Fine-grained PAT</h1>
+      <p class="note">
+        此工具在浏览器本地运行，不会发网。使用
+        <strong>PBKDF2-SHA256(200k)</strong> +
+        <strong>AES‑GCM(256)</strong>。记住你的
+        <code>username:password</code>，否则将无法解密。
+      </p>
+      <div class="card">
+        <label>Username</label><input id="user" placeholder="editor" />
+        <label>Password</label
+        ><input id="pass" type="password" placeholder="strong password" />
+        <label>Fine-grained PAT</label><input id="pat" placeholder="ghp_..." />
+        <div style="margin-top: 10px">
+          <button id="encBtn" class="btn">Encrypt</button>
+        </div>
+        <label
+          >Output JSON → paste into <code>ENCRYPTED_SECRET</code> in
+          admin_psk.html</label
+        >
+        <textarea id="out" readonly></textarea>
+      </div>
     </div>
-    <label>Output JSON → paste into <code>ENCRYPTED_SECRET</code> in admin_psk.html</label>
-    <textarea id="out" readonly></textarea>
-  </div>
-</div>
-<script>
-const enc = new TextEncoder(); const dec = new TextDecoder();
-function b2a(buf){ return btoa(String.fromCharCode(...new Uint8Array(buf))); }
-function rbytes(n){ const a = new Uint8Array(n); crypto.getRandomValues(a); return a; }
-async function deriveKey(username, password, salt){
-  const material = await crypto.subtle.importKey('raw', enc.encode(username+':'+password), 'PBKDF2', false, ['deriveKey']);
-  return crypto.subtle.deriveKey({name:'PBKDF2', salt, iterations:200000, hash:'SHA-256'}, material, {name:'AES-GCM', length:256}, false, ['encrypt']);
-}
-document.getElementById('encBtn').onclick = async ()=>{
-  const u = document.getElementById('user').value.trim();
-  const p = document.getElementById('pass').value;
-  const pat = document.getElementById('pat').value.trim();
-  if (!u || !p || !pat) { alert('Fill all fields'); return; }
-  const salt = rbytes(16), iv = rbytes(12);
-  const key = await deriveKey(u,p,salt);
-  const ct = await crypto.subtle.encrypt({name:'AES-GCM', iv}, key, enc.encode(pat));
-  const out = { salt: b2a(salt), iv: b2a(iv), data: b2a(ct) };
-  document.getElementById('out').value = JSON.stringify(out);
-};
-</script>
-</body>
+    <script>
+      const enc = new TextEncoder();
+      const dec = new TextDecoder();
+      function b2a(buf) {
+        return btoa(String.fromCharCode(...new Uint8Array(buf)));
+      }
+      function rbytes(n) {
+        const a = new Uint8Array(n);
+        crypto.getRandomValues(a);
+        return a;
+      }
+      async function deriveKey(username, password, salt) {
+        const material = await crypto.subtle.importKey(
+          "raw",
+          enc.encode(username + ":" + password),
+          "PBKDF2",
+          false,
+          ["deriveKey"]
+        );
+        return crypto.subtle.deriveKey(
+          { name: "PBKDF2", salt, iterations: 200000, hash: "SHA-256" },
+          material,
+          { name: "AES-GCM", length: 256 },
+          false,
+          ["encrypt"]
+        );
+      }
+      document.getElementById("encBtn").onclick = async () => {
+        const u = document.getElementById("user").value.trim();
+        const p = document.getElementById("pass").value;
+        const pat = document.getElementById("pat").value.trim();
+        if (!u || !p || !pat) {
+          alert("Fill all fields");
+          return;
+        }
+        const salt = rbytes(16),
+          iv = rbytes(12);
+        const key = await deriveKey(u, p, salt);
+        const ct = await crypto.subtle.encrypt(
+          { name: "AES-GCM", iv },
+          key,
+          enc.encode(pat)
+        );
+        const out = { salt: b2a(salt), iv: b2a(iv), data: b2a(ct) };
+        document.getElementById("out").value = JSON.stringify(out);
+      };
+    </script>
+  </body>
 </html>
