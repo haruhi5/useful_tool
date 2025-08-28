@@ -186,7 +186,7 @@
 
 <script>
 // ========= Config: paste your encrypted secret here =========
-let ENCRYPTED_SECRET = {"salt":"", "iv":"", "data":""}; // Replace with setup_encrypt.html output
+let ENCRYPTED_SECRET = {"salt":"EqKkZOoThkmafj1IhmTdJg==","iv":"tx2kxLG+nQILGzrC","data":"S7pjzPS0YYHKSQ0EKpYqcfTMM4xwaQK7NQkdKSrGHlTbeNmSKyAPvba/SyNZcXKSpR0MfVI+hCeOqT5ZhAeUd8kVm2Svjo15ivQicWLx6L63U+2jUfhiZ2/CMxok+diidE4rSSZEbHPTFl3zVg=="}; // Replace with setup_encrypt.html output
 // ===========================================================
 
 const api = "https://api.github.com";
@@ -286,7 +286,7 @@ function mdProcess(name, text, keepMd){
   if (keepMd){
     // create a simple viewer HTML that fetches same-dir .md and renders via marked
     const base = name.replace(/\.md$/i, '');
-    const viewer = `<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${base}</title><style>body{font:16px/1.7 ui-sans-serif,system-ui;padding:20px;max-width:860px;margin:auto}</style><script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script></head><body><div id="app">Loading…</div><script>(async()=>{const mdUrl=location.pathname.replace(/\\.html$/,'.md');const r=await fetch(mdUrl);const t=await r.text();document.getElementById('app').innerHTML=marked.parse(t);})();</script></body></html>`;
+    const viewer = "<!doctype html><html><head><meta charset=\"utf-8\"><meta name=\"viewport\" content=\"width=device-width,initial-scale=1\"><title>"+base+"</title><style>body{font:16px/1.7 ui-sans-serif,system-ui;padding:20px;max-width:860px;margin:auto}</style><script src=\"https://cdn.jsdelivr.net/npm/marked/marked.min.js\"><\\/script></head><body><div id=\"app\">Loading…</div><script>(async()=>{const mdUrl=location.pathname.replace(/\\.html$/,'.md');const r=await fetch(mdUrl);const t=await r.text();document.getElementById('app').innerHTML=marked.parse(t);})();<\\/script></body></html>";
     return { html: text, ext: '.md', viewer };
   } else {
     // convert md -> html immediately
@@ -341,7 +341,6 @@ $('createPR').onclick = async ()=>{
     let path = '', viewerPath = null;
     const baseSlug = slug(title);
     const rawText = await file.text();
-    let payload = rawText;
     if (/\.md$/i.test(file.name)){
       const conv = mdProcess(file.name, rawText, keepMd);
       if (conv.ext === '.md'){
@@ -358,7 +357,7 @@ $('createPR').onclick = async ()=>{
       }
     } else {
       path = `tags/${primaryTag}/${baseSlug}.html`;
-      await putContent(owner,repo,path,newBranch,`Add article: ${title}`, payload);
+      await putContent(owner,repo,path,newBranch,`Add article: ${title}`, rawText);
     }
 
     // Update content.json
@@ -455,7 +454,7 @@ $('updatePost').onclick = async ()=>{
       const ext = (/\.md$/i.test(original.url) || original.url.endsWith('.md')) ? '.md' : '.html';
       const baseSlug = slug(title);
       if (useHtmlViewer) {
-        // When keeping md, we move to .md + create viewer .html
+        // move to .md + viewer
         newPath = `tags/${primaryTag}/${baseSlug}.md`;
       } else {
         newPath = `tags/${primaryTag}/${baseSlug}${ext}`;
@@ -472,7 +471,7 @@ $('updatePost').onclick = async ()=>{
       // possibly add viewer for md
       if (useHtmlViewer){
         const viewerPath = newPath.replace(/\.md$/i, '.html');
-        const viewer = `<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${title}</title><style>body{font:16px/1.7 ui-sans-serif,system-ui;padding:20px;max-width:860px;margin:auto}</style><script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script></head><body><div id="app">Loading…</div><script>(async()=>{const mdUrl=location.pathname.replace(/\\.html$/,'.md');const r=await fetch(mdUrl);const t=await r.text();document.getElementById('app').innerHTML=marked.parse(t);})();</script></body></html>`;
+        const viewer = "<!doctype html><html><head><meta charset=\"utf-8\"><meta name=\"viewport\" content=\"width=device-width,initial-scale=1\"><title>"+title+"</title><style>body{font:16px/1.7 ui-sans-serif,system-ui;padding:20px;max-width:860px;margin:auto}</style><script src=\"https://cdn.jsdelivr.net/npm/marked/marked.min.js\"><\\/script></head><body><div id=\"app\">Loading…</div><script>(async()=>{const mdUrl=location.pathname.replace(/\\.html$/,'.md');const r=await fetch(mdUrl);const t=await r.text();document.getElementById('app').innerHTML=marked.parse(t);})();<\\/script></body></html>";
         await putContent(owner,repo,viewerPath,newBranch,`Add md viewer: ${title}`, viewer);
         newPath = viewerPath; // content.json should point to viewer
       }
@@ -481,10 +480,10 @@ $('updatePost').onclick = async ()=>{
       const cur = await getContent(owner,repo,original.url, baseBranch);
       setStatus('estatus','Replacing file content...');
       await putContent(owner,repo,original.url,newBranch,`Replace article file: ${title}`, contentText, cur.sha);
-      // if we kept md, ensure viewer exists at same base name
+      // ensure viewer if keeping md
       if (useHtmlViewer){
         const viewerPath = original.url.replace(/\.md$/i, '.html');
-        const viewer = `<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${title}</title><style>body{font:16px/1.7 ui-sans-serif,system-ui;padding:20px;max-width:860px;margin:auto}</style><script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script></head><body><div id="app">Loading…</div><script>(async()=>{const mdUrl=location.pathname.replace(/\\.html$/,'.md');const r=await fetch(mdUrl);const t=await r.text();document.getElementById('app').innerHTML=marked.parse(t);})();</script></body></html>`;
+        const viewer = "<!doctype html><html><head><meta charset=\"utf-8\"><meta name=\"viewport\" content=\"width=device-width,initial-scale=1\"><title>"+title+"</title><style>body{font:16px/1.7 ui-sans-serif,system-ui;padding:20px;max-width:860px;margin:auto}</style><script src=\"https://cdn.jsdelivr.net/npm/marked/marked.min.js\"><\\/script></head><body><div id=\"app\">Loading…</div><script>(async()=>{const mdUrl=location.pathname.replace(/\\.html$/,'.md');const r=await fetch(mdUrl);const t=await r.text();document.getElementById('app').innerHTML=marked.parse(t);})();<\\/script></body></html>";
         await putContent(owner,repo,viewerPath,newBranch,`Ensure md viewer: ${title}`, viewer);
         newPath = viewerPath;
       }
@@ -598,18 +597,10 @@ $('b_apply').onclick = async ()=>{
       POSTS[i] = { ...p, title:newTitle, url:newPath, tags: [targetTag, ...(p.tags||[]).slice(1)] };
     }
 
-    // update content.json
+    // update content.json — use updated POSTS as new source of truth
     const cont = await getContent(owner,repo,'data/content.json', newBranch);
     let json = {}; try{ json = cont.content ? JSON.parse(cont.content) : {}; } catch(e){ json = {}; }
     if (!Array.isArray(json.posts)) json.posts = [];
-    // naive replace by matching old url/title pairs
-    json.posts = json.posts.map(old => {
-      const match = POSTS.find(p => p.title===old.title && p.url===old.url) || json.posts.find(()=>false);
-      const newer = POSTS.find(p => p.title===old.title && p.url===old.url); // none
-      // Better: match by original URL snapshot: but we mutated POSTS; keep a map in future.
-      return old;
-    });
-    // Simpler: replace whole list with in-memory POSTS (safe when single editor)
     json.posts = POSTS;
     await putContent(owner,repo,'data/content.json', newBranch, `Batch update posts`, JSON.stringify(json, null, 2), cont.sha);
 
@@ -640,7 +631,6 @@ $('rv_btn').onclick = async ()=>{
     setStatus('rv_status',`Revert PR created → ${data.html_url || ''}`);
   }catch(e){ setStatus('rv_status','Error: '+e.message+' (Your repo may not support Revert API; consider manual revert.)'); }
 };
-
 </script>
 </body>
 </html>
