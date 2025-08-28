@@ -1,0 +1,484 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Spin Wheel — Weights + No-Repeat (Pure HTML/JS, Topics)</title>
+  <style>
+    :root{
+      --bg:#ffffff; --fg:#0f172a; --muted:#475569; --border:#e2e8f0;
+      --accent:#0b6cff; --soft:#f8fafc; --warn:#fff7ed; --ok:#ecfeff;
+    }
+    *{box-sizing:border-box}
+    html,body{margin:0;padding:0;background:var(--bg);color:var(--fg);font:16px/1.6 system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial}
+    .page{max-width:1000px;margin:24px auto 56px;padding:0 16px}
+    h1{font-size:24px;margin:0 0 6px}
+    .sub{color:var(--muted);margin:0 0 16px}
+    .bar{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin:12px 0}
+    .input{flex:1;min-width:220px;border:1px solid var(--border);border-radius:10px;padding:10px 12px;font-size:16px}
+    .btn{border:1px solid var(--border);background:#111;color:#fff;border-radius:10px;padding:10px 14px;font-weight:600;cursor:pointer}
+    .btn.ghost{background:#fff;color:#111}
+    .btn:disabled{opacity:.6;cursor:not-allowed}
+    .small{font-size:14px;color:var(--muted)}
+    .row{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+    .mini{width:76px;text-align:center}
+    .switch{display:inline-flex;align-items:center;gap:6px;padding:6px 8px;border:1px solid var(--border);border-radius:999px;background:var(--soft)}
+    .wheel-wrap{position:relative;margin:18px auto 6px;width:min(92vw,460px);}
+    /* Pointer triangle points INWARD (toward wheel center) */
+    .pointer{position:absolute;left:50%;top:-6px;transform:translateX(-50%); width:0;height:0;
+      border-left:12px solid transparent;border-right:12px solid transparent;border-bottom:20px solid #111; /* tip downwards toward wheel */
+      z-index:5;filter:drop-shadow(0 1px 0 rgba(0,0,0,.2));
+    }
+    .wheel{width:100%;height:auto;display:block;transition:transform 4.3s cubic-bezier(.22,1,.36,1);transform:rotate(0deg);}
+    .ctrl{display:flex;justify-content:center;margin:10px 0}
+    .spin{background:var(--accent);border-color:transparent}
+    .spin:disabled{background:#9bbcff}
+    .list{margin-top:10px;border-top:1px solid var(--border)}
+    .item{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:8px 0;border-bottom:1px solid var(--border)}
+    .label{flex:1}
+    .wctrl{display:flex;align-items:center;gap:6px}
+    .step{width:28px;height:28px;border-radius:8px;background:#f3f4f6;border:none;font-weight:700;cursor:pointer}
+    .winput{width:56px;border:1px solid var(--border);border-radius:8px;padding:6px;text-align:center}
+    .remove{color:#ef4444;cursor:pointer;font-weight:600}
+    .result{margin-top:10px;display:inline-flex;gap:8px;align-items:center;padding:10px 14px;background:var(--ok);border:1px solid #a5f3fc;border-radius:10px}
+    .chips{display:flex;flex-wrap:wrap;gap:6px;margin-top:8px}
+    .chip{background:#f1f5f9;padding:6px 10px;border-radius:999px;font-size:12px;color:#334155;cursor:pointer}
+    .note{margin-top:18px}
+    .warn{background:var(--warn);border:1px solid #fed7aa;padding:10px 12px;border-radius:10px}
+    .footer{margin-top:20px;color:var(--muted);font-size:12px}
+    select.topic{min-width:200px;border:1px solid var(--border);border-radius:10px;padding:10px 12px;background:#fff}
+    .spacer{flex:1}
+    @media (max-width:520px){ .mini{width:64px} }
+  </style>
+  <link rel="stylesheet" href="/assets/toc.css">
+</head>
+<body>
+  <div class="page">
+    <h1>Spin Wheel — Weights + No-Repeat (Pure JS, Topics)</h1>
+    <p class="sub">Switch topics, edit options/weights, prevent repeating recent N, single-click spin. Persists with <code>localStorage</code>.</p>
+
+    <!-- Topic bar -->
+    <div class="bar row" id="topicBar">
+      <label for="topicSelect">Topic:</label>
+      <select id="topicSelect" class="topic"></select>
+      <button id="addTopicBtn" class="btn ghost">Add Topic</button>
+      <button id="renameTopicBtn" class="btn ghost">Rename</button>
+      <button id="delTopicBtn" class="btn ghost">Delete</button>
+      <div class="spacer"></div>
+      <button id="exportBtn" class="btn ghost">Export JSON</button>
+      <input id="importFile" type="file" accept="application/json" style="display:none" />
+      <button id="importBtn" class="btn ghost">Import JSON</button>
+    </div>
+
+    <!-- Add/clear -->
+    <div class="bar">
+      <input id="optInput" class="input" placeholder="Add an option…" />
+      <button id="addBtn" class="btn">Add</button>
+      <button id="clearBtn" class="btn ghost">Clear</button>
+    </div>
+
+    <!-- Settings -->
+    <div class="bar row">
+      <span>Disallow repeating last N:</span>
+      <input id="recentN" class="input mini" type="number" min="0" step="1" value="2" />
+      <div class="switch">
+        <input id="drawWeighted" type="checkbox" checked />
+        <label for="drawWeighted">Draw weighted sectors</label>
+      </div>
+    </div>
+
+    <!-- Wheel -->
+    <div class="wheel-wrap">
+      <div class="pointer" title="Pointer faces the wheel"></div>
+      <svg id="wheel" class="wheel" viewBox="-1 -1 2 2" style="max-width:460px;aspect-ratio:1/1"></svg>
+    </div>
+
+    <div class="ctrl">
+      <button id="spinBtn" class="btn spin">Spin once</button>
+    </div>
+
+    <div id="result" class="result" style="display:none">
+      <strong>Result:</strong><span id="resultText"></span>
+    </div>
+
+    <div id="chips" class="chips"></div>
+
+    <div class="list" id="list"></div>
+
+    <div class="note warn">
+      Tip: If N ≥ number of options, the app will temporarily relax the rule so at least one option can win.
+    </div>
+
+    <div class="footer">v1.1 — Single HTML/JS. Topics + Export/Import. Place this file into GitHub Pages.</div>
+  </div>
+
+<script>
+(() => {
+  /* ====================== State & Storage ====================== */
+  const KEY_TOPICS   = 'sw_topics_v1'; // { name: { options:[{id,label,weight}], settings:{recentN,drawWeighted,recentIds[]} } }
+  const KEY_ACTIVE   = 'sw_active_topic_v1';
+
+  const $ = (id) => document.getElementById(id);
+  const topicSelect = $('topicSelect');
+  const addTopicBtn = $('addTopicBtn');
+  const renameTopicBtn = $('renameTopicBtn');
+  const delTopicBtn = $('delTopicBtn');
+  const exportBtn = $('exportBtn');
+  const importBtn = $('importBtn');
+  const importFile = $('importFile');
+
+  const optInput = $('optInput');
+  const addBtn = $('addBtn');
+  const clearBtn = $('clearBtn');
+  const recentNInput = $('recentN');
+  const drawWeightedInput = $('drawWeighted');
+  const wheelSvg = $('wheel');
+  const spinBtn = $('spinBtn');
+  const resultBox = $('result');
+  const resultText = $('resultText');
+  const listBox = $('list');
+  const chipsBox = $('chips');
+
+  let topics = {};           // map name -> {options, settings}
+  let active = '';           // active topic name
+  let options = [];          // current options (by active topic)
+  let settings = {};         // current settings (by active topic)
+  let currentRotation = 0;   // wheel rotation
+  let spinning = false;
+
+  function uid() { return Math.random().toString(36).slice(2) + Date.now().toString(36); }
+  function clamp(v, min, max) { return Math.min(max, Math.max(min, v)); }
+  function normDeg(d) { return ((d % 360) + 360) % 360; }
+
+  function defaultTopicData() {
+    return {
+      options: [
+        { id: uid(), label: 'Option 1', weight: 1 },
+        { id: uid(), label: 'Option 2', weight: 1 },
+        { id: uid(), label: 'Option 3', weight: 1 },
+      ],
+      settings: { recentN: 2, drawWeighted: true, recentIds: [] }
+    };
+  }
+
+  function saveAll() {
+    topics[active] = { options, settings };
+    localStorage.setItem(KEY_TOPICS, JSON.stringify(topics));
+    localStorage.setItem(KEY_ACTIVE, active);
+  }
+
+  function loadAll() {
+    try {
+      topics = JSON.parse(localStorage.getItem(KEY_TOPICS) || '{}') || {};
+      active = localStorage.getItem(KEY_ACTIVE) || '';
+    } catch (e) {
+      topics = {}; active = '';
+    }
+    // bootstrap
+    if (!active || !topics[active]) {
+      active = 'Default';
+      if (!topics[active]) topics[active] = defaultTopicData();
+      localStorage.setItem(KEY_ACTIVE, active);
+      localStorage.setItem(KEY_TOPICS, JSON.stringify(topics));
+    }
+    options = topics[active].options || [];
+    settings = topics[active].settings || { recentN: 2, drawWeighted: true, recentIds: [] };
+  }
+
+  function setActive(name) {
+    if (!topics[name]) return;
+    // save current first
+    if (active) topics[active] = { options, settings };
+    active = name;
+    options = topics[name].options || [];
+    settings = topics[name].settings || { recentN: 2, drawWeighted: true, recentIds: [] };
+    // reflect UI
+    recentNInput.value = settings.recentN;
+    drawWeightedInput.checked = !!settings.drawWeighted;
+    topicSelect.value = active;
+    saveAll();
+    renderAll();
+  }
+
+  function renderTopicSelect() {
+    topicSelect.innerHTML = '';
+    Object.keys(topics).sort().forEach((name)=>{
+      const opt = document.createElement('option');
+      opt.value = name; opt.textContent = name;
+      topicSelect.appendChild(opt);
+    });
+    topicSelect.value = active;
+  }
+
+  /* ====================== Wheel Rendering ====================== */
+  function colors(n) {
+    const arr = [];
+    for (let i=0;i<n;i++) arr.push(`hsl(${(i*360/n)},80%,60%)`);
+    return arr;
+  }
+  function polar(deg, r) { const rad = deg * Math.PI/180; return {x: Math.cos(rad)*r, y: Math.sin(rad)*r}; }
+  function centroid(deg, r){ return polar(deg, r); }
+  function arcPath(startDeg, endDeg, rOuter=0.98, rInner=0) {
+    const s = polar(startDeg, rOuter);
+    const e = polar(endDeg, rOuter);
+    const large = (endDeg - startDeg) % 360 > 180 ? 1 : 0;
+    const outer = `M ${s.x} ${s.y} A ${rOuter} ${rOuter} 0 ${large} 1 ${e.x} ${e.y}`;
+    if (rInner <= 0) return `${outer} L 0 0 Z`;
+    const si = polar(endDeg, rInner);
+    const ei = polar(startDeg, rInner);
+    const large2 = (endDeg - startDeg) % 360 > 180 ? 1 : 0;
+    return `${outer} L ${si.x} ${si.y} A ${rInner} ${rInner} 0 ${large2} 0 ${ei.x} ${ei.y} Z`;
+  }
+  function buildArcs(data, weighted) {
+    const total = weighted ? data.reduce((s,o)=>s+Math.max(1,o.weight||1),0) : data.length;
+    if (!total) return [];
+    let acc = -90; // start at top
+    const arcs = [];
+    for (let i=0;i<data.length;i++){
+      const share = weighted ? Math.max(1,data[i].weight||1)/total : 1/total;
+      const sweep = share * 360;
+      const start = acc;
+      const end = acc + sweep;
+      const mid = (start+end)/2;
+      const c = centroid(mid, 0.6);
+      arcs.push({ id:data[i].id, label:data[i].label, weight:data[i].weight||1, start, end, mid, cx:c.x, cy:c.y });
+      acc = end;
+    }
+    return arcs;
+  }
+
+  function renderWheel() {
+    const data = options.length ? options : [{id:'placeholder',label:'—',weight:1}];
+    const arcs = buildArcs(data, !!drawWeightedInput.checked);
+    const cols = colors(arcs.length || 1);
+    while (wheelSvg.firstChild) wheelSvg.removeChild(wheelSvg.firstChild);
+    arcs.forEach((a,i)=>{
+      const path = document.createElementNS('http://www.w3.org/2000/svg','path');
+      path.setAttribute('d', arcPath(a.start, a.end, 0.98, 0));
+      path.setAttribute('fill', cols[i%cols.length]);
+      path.setAttribute('stroke', '#fff');
+      path.setAttribute('stroke-width','0.01');
+      wheelSvg.appendChild(path);
+      const text = document.createElementNS('http://www.w3.org/2000/svg','text');
+      text.setAttribute('x', a.cx); text.setAttribute('y', a.cy);
+      text.setAttribute('fill', '#111'); text.setAttribute('font-size','0.08'); text.setAttribute('font-weight','600');
+      text.setAttribute('text-anchor','middle'); text.setAttribute('dominant-baseline','middle');
+      const label = `${a.label} (${a.weight})`;
+      text.textContent = label.length>18 ? label.slice(0,17)+'…' : label;
+      wheelSvg.appendChild(text);
+    });
+    const rim = document.createElementNS('http://www.w3.org/2000/svg','circle');
+    rim.setAttribute('cx','0');rim.setAttribute('cy','0');rim.setAttribute('r','0.98');
+    rim.setAttribute('fill','transparent');rim.setAttribute('stroke','#0f172a');rim.setAttribute('stroke-width','0.01');
+    wheelSvg.appendChild(rim);
+  }
+
+  /* ====================== List / Chips / Result ====================== */
+  function renderList() {
+    listBox.innerHTML = '';
+    if (!options.length) {
+      const p = document.createElement('p');
+      p.className='small'; p.textContent='No options yet. Add some above.';
+      listBox.appendChild(p); return;
+    }
+    options.forEach((o)=>{
+      const row = document.createElement('div'); row.className='item';
+      const label = document.createElement('div'); label.className='label'; label.textContent = o.label;
+      const wctrl = document.createElement('div'); wctrl.className='wctrl';
+      const minus = document.createElement('button'); minus.className='step'; minus.textContent='-';
+      const inp = document.createElement('input'); inp.className='winput'; inp.type='number'; inp.step='1'; inp.min='1'; inp.value=String(o.weight||1);
+      const plus = document.createElement('button'); plus.className='step'; plus.textContent='+';
+      const rem = document.createElement('span'); rem.className='remove'; rem.textContent='Remove';
+
+      minus.onclick = ()=>{ o.weight = clamp((o.weight||1)-1,1,9999); inp.value=o.weight; saveAll(); renderWheel(); };
+      plus.onclick  = ()=>{ o.weight = clamp((o.weight||1)+1,1,9999); inp.value=o.weight; saveAll(); renderWheel(); };
+      inp.oninput   = ()=>{ const v = Math.floor(+inp.value||1); o.weight = clamp(v,1,9999); saveAll(); renderWheel(); };
+      rem.onclick   = ()=>{ options = options.filter(x=>x.id!==o.id); settings.recentIds = (settings.recentIds||[]).filter(id=>id!==o.id); saveAll(); renderList(); renderWheel(); renderChips(); };
+
+      wctrl.appendChild(minus); wctrl.appendChild(inp); wctrl.appendChild(plus);
+      row.appendChild(label); row.appendChild(wctrl); row.appendChild(rem);
+      listBox.appendChild(row);
+    });
+  }
+
+  function renderChips() {
+    chipsBox.innerHTML='';
+    const n = clamp(settings.recentN||0, 0, Math.max(0, options.length-1));
+    (settings.recentIds||[]).slice(0,n).forEach(id=>{
+      const o = options.find(x=>x.id===id);
+      if (!o) return;
+      const c = document.createElement('div'); c.className='chip'; c.textContent=o.label;
+      c.title = 'Recently selected'; chipsBox.appendChild(c);
+    });
+  }
+
+  function showResult(text) {
+    if (!text) { resultBox.style.display='none'; return; }
+    resultText.textContent = text;
+    resultBox.style.display = 'inline-flex';
+  }
+
+  function renderAll() {
+    recentNInput.value = settings.recentN||0;
+    drawWeightedInput.checked = !!settings.drawWeighted;
+    renderWheel(); renderList(); renderChips(); showResult(null);
+  }
+
+  /* ====================== Options Ops ====================== */
+  function addOption(label) {
+    const v = String(label || '').trim();
+    if (!v) return;
+    if (options.some(o=>o.label===v)) return;
+    options.push({ id: uid(), label: v, weight: 1 });
+    saveAll(); renderList(); renderWheel();
+  }
+  function clearAll() {
+    options = []; settings.recentIds=[];
+    saveAll(); renderList(); renderWheel(); showResult(null);
+  }
+
+  /* ====================== Drawing / Spin ====================== */
+  function buildArcs(data, weighted) {
+    const total = weighted ? data.reduce((s,o)=>s+Math.max(1,o.weight||1),0) : data.length;
+    if (!total) return [];
+    let acc = -90;
+    const arcs = [];
+    for (let i=0;i<data.length;i++){
+      const share = weighted ? Math.max(1,data[i].weight||1)/total : 1/total;
+      const sweep = share * 360;
+      const start = acc, end = acc + sweep, mid = (start+end)/2;
+      const c = { x: Math.cos(mid*Math.PI/180)*0.6, y: Math.sin(mid*Math.PI/180)*0.6 };
+      arcs.push({ id:data[i].id, label:data[i].label, weight:data[i].weight||1, start, end, mid, cx:c.x, cy:c.y });
+      acc = end;
+    }
+    return arcs;
+  }
+
+  function pickWinnerId() {
+    if (!options.length) return null;
+    const effectiveN = clamp(settings.recentN||0, 0, Math.max(0, options.length-1));
+    const forbidden = new Set((settings.recentIds||[]).slice(0,effectiveN));
+    let candidates = options.filter(o=>!forbidden.has(o.id));
+    if (!candidates.length) candidates = options.slice();
+    const weights = candidates.map(o=>Math.max(1,o.weight||1));
+    const total = weights.reduce((a,b)=>a+b,0);
+    let r = Math.random() * total;
+    for (let i=0;i<candidates.length;i++){ r -= weights[i]; if (r<=0) return candidates[i].id; }
+    return candidates[candidates.length-1].id;
+  }
+
+  function spinOnce() {
+    if (spinning || !options.length) return;
+    const arcs = buildArcs(options, !!drawWeightedInput.checked);
+    const id = pickWinnerId(); if (!id) return;
+    const a = arcs.find(x=>x.id===id); if (!a) return;
+
+    spinning = true; spinBtn.disabled = true;
+    const base = normDeg(currentRotation);
+    const targetFinal = normDeg(270 - a.mid);
+    const spins = 4 + Math.floor(Math.random()*3);
+    const delta = normDeg(targetFinal - base);
+    const target = base + spins*360 + delta;
+    currentRotation = target;
+    wheelSvg.style.transform = `rotate(${target}deg)`;
+
+    setTimeout(()=>{
+      spinning = false; spinBtn.disabled = false;
+      const winner = options.find(o=>o.id===id);
+      if (winner) {
+        settings.recentIds = [winner.id, ...(settings.recentIds||[]).filter(x=>x!==winner.id)].slice(0,50);
+        saveAll(); renderChips(); showResult(winner.label);
+      }
+    }, 4400);
+  }
+
+  /* ====================== Topics: Add/Rename/Delete ====================== */
+  function promptName(def='New Topic') {
+    const name = (prompt('Topic name:', def) || '').trim();
+    if (!name) return null;
+    if (name in topics && name !== active && !confirm('Topic exists. Overwrite?')) return null;
+    return name;
+  }
+
+  function addTopic() {
+    const name = promptName('Topic ' + (Object.keys(topics).length+1));
+    if (!name) return;
+    topics[name] = defaultTopicData();
+    renderTopicSelect(); setActive(name);
+  }
+
+  function renameTopic() {
+    const name = promptName(active);
+    if (!name || name === active) return;
+    topics[name] = { options, settings };
+    delete topics[active];
+    active = name;
+    renderTopicSelect(); setActive(name);
+  }
+
+  function deleteTopic() {
+    if (!confirm(`Delete topic "${active}"?`)) return;
+    const names = Object.keys(topics);
+    if (names.length <= 1) { alert('At least one topic must remain.'); return; }
+    delete topics[active];
+    const next = names.find(n=>n!==active) || 'Default';
+    renderTopicSelect(); setActive(next);
+  }
+
+  function exportJSON() {
+    // Persist current state first
+    saveAll();
+    const blob = new Blob([JSON.stringify({ active, topics }, null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url; a.download = 'spin_wheel_topics.json'; a.click();
+    setTimeout(()=>URL.revokeObjectURL(url), 1000);
+  }
+
+  function importJSON(file) {
+    const reader = new FileReader();
+    reader.onload = () => {
+      try {
+        const data = JSON.parse(String(reader.result || '{}'));
+        if (!data || typeof data !== 'object' || !data.topics) throw new Error('Invalid JSON');
+        topics = data.topics;
+        active = data.active && topics[data.active] ? data.active : Object.keys(topics)[0];
+        saveAll();
+        renderTopicSelect(); setActive(active);
+      } catch (e) {
+        alert('Failed to import JSON: ' + e.message);
+      }
+    };
+    reader.readAsText(file);
+  }
+
+  /* ====================== Events ====================== */
+  addTopicBtn.onclick = addTopic;
+  renameTopicBtn.onclick = renameTopic;
+  delTopicBtn.onclick = deleteTopic;
+  topicSelect.onchange = () => setActive(topicSelect.value);
+
+  exportBtn.onclick = exportJSON;
+  importBtn.onclick = () => importFile.click();
+  importFile.onchange = (e) => {
+    const f = e.target.files && e.target.files[0];
+    if (f) importJSON(f);
+    importFile.value = '';
+  };
+
+  addBtn.onclick = () => { addOption(optInput.value); optInput.value=''; };
+  optInput.addEventListener('keydown', (e)=>{ if (e.key==='Enter'){ addOption(optInput.value); optInput.value=''; }});
+  clearBtn.onclick = clearAll;
+  recentNInput.oninput = () => { settings.recentN = clamp(Math.floor(+recentNInput.value||0), 0, 999); saveAll(); renderChips(); };
+  drawWeightedInput.onchange = () => { settings.drawWeighted = !!drawWeightedInput.checked; saveAll(); renderWheel(); };
+  spinBtn.onclick = spinOnce;
+
+  /* ====================== Init ====================== */
+  loadAll();
+  renderTopicSelect();
+  setActive(active);
+})();
+</script>
+  <script src="/assets/toc.js" defer></script>
+</body>
+</html>
