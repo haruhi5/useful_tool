@@ -62,35 +62,47 @@ const sgdToCny = computed(() => {
 
 const outUSD = computed(() => {
   if (usdToSgd.value === null || usdToCny.value === null) return '-'
-  const baseToUSD = {
-    USD: 1,
-    SGD: usdToSgd.value,
-    CNY: usdToCny.value,
-  }[baseCurrency.value]
-  const amountInUsd = amount.value * baseToUSD
+  
+  let amountInUsd
+  if (baseCurrency.value === 'USD') {
+    amountInUsd = amount.value
+  } else if (baseCurrency.value === 'SGD') {
+    amountInUsd = amount.value / usdToSgd.value
+  } else { // CNY
+    amountInUsd = amount.value / usdToCny.value
+  }
+  
   return amountInUsd.toFixed(2)
 })
 
 const outSGD = computed(() => {
   if (usdToSgd.value === null || usdToCny.value === null) return '-'
-  const baseToUSD = {
-    USD: 1,
-    SGD: usdToSgd.value,
-    CNY: usdToCny.value,
-  }[baseCurrency.value]
-  const amountInUsd = amount.value * baseToUSD
-  return (amountInUsd / usdToSgd.value).toFixed(2)
+  
+  let amountInUsd
+  if (baseCurrency.value === 'USD') {
+    amountInUsd = amount.value
+  } else if (baseCurrency.value === 'SGD') {
+    amountInUsd = amount.value / usdToSgd.value
+  } else { // CNY
+    amountInUsd = amount.value / usdToCny.value
+  }
+  
+  return (amountInUsd * usdToSgd.value).toFixed(2)
 })
 
 const outCNY = computed(() => {
   if (usdToSgd.value === null || usdToCny.value === null) return '-'
-  const baseToUSD = {
-    USD: 1,
-    SGD: usdToSgd.value,
-    CNY: usdToCny.value,
-  }[baseCurrency.value]
-  const amountInUsd = amount.value * baseToUSD
-  return (amountInUsd / usdToCny.value).toFixed(2)
+  
+  let amountInUsd
+  if (baseCurrency.value === 'USD') {
+    amountInUsd = amount.value
+  } else if (baseCurrency.value === 'SGD') {
+    amountInUsd = amount.value / usdToSgd.value
+  } else { // CNY
+    amountInUsd = amount.value / usdToCny.value
+  }
+  
+  return (amountInUsd * usdToCny.value).toFixed(2)
 })
 
 async function refreshRates() {

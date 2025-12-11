@@ -105,6 +105,10 @@ onMounted(() => {
 })
 
 function drawWheel() {
+  drawWheelRotated(currentAngle.value)
+}
+
+function drawWheelRotated(rotationAngle) {
   const canvas = wheelCanvas.value
   if (!canvas) return
 
@@ -123,14 +127,14 @@ function drawWheel() {
   // Calculate total weight
   const totalWeight = enabled.reduce((sum, o) => sum + o.weight, 0)
 
-  // Draw segments
-  let currentAngle = -Math.PI / 2
+  // Draw segments with rotation
+  let angle = -rotationAngle
   enabled.forEach((opt, idx) => {
     const sliceAngle = (opt.weight / totalWeight) * 2 * Math.PI
 
     // Draw slice
     ctx.beginPath()
-    ctx.arc(centerX, centerY, radius, currentAngle, currentAngle + sliceAngle)
+    ctx.arc(centerX, centerY, radius, angle, angle + sliceAngle)
     ctx.lineTo(centerX, centerY)
     ctx.fillStyle = `hsl(${(idx * 360) / enabled.length}, 70%, 60%)`
     ctx.fill()
@@ -139,7 +143,7 @@ function drawWheel() {
     ctx.stroke()
 
     // Draw text
-    const textAngle = currentAngle + sliceAngle / 2
+    const textAngle = angle + sliceAngle / 2
     ctx.save()
     ctx.translate(centerX, centerY)
     ctx.rotate(textAngle)
@@ -149,7 +153,7 @@ function drawWheel() {
     ctx.fillText(opt.text, radius - 20, 5)
     ctx.restore()
 
-    currentAngle += sliceAngle
+    angle += sliceAngle
   })
 }
 
@@ -220,53 +224,6 @@ function spin() {
   }
 
   requestAnimationFrame(animate)
-}
-
-function drawWheelRotated(rotationAngle) {
-  const canvas = wheelCanvas.value
-  if (!canvas) return
-
-  const ctx = canvas.getContext('2d')
-  const centerX = canvas.width / 2
-  const centerY = canvas.height / 2
-  const radius = Math.min(centerX, centerY) - 20
-
-  // Clear
-  ctx.fillStyle = '#f5f5f5'
-  ctx.fillRect(0, 0, canvas.width, canvas.height)
-
-  const enabled = enabledOptions.value
-  if (enabled.length === 0) return
-
-  const totalWeight = enabled.reduce((sum, o) => sum + o.weight, 0)
-  let currentAngle = -rotationAngle // Apply rotation offset
-
-  enabled.forEach((opt, idx) => {
-    const sliceAngle = (opt.weight / totalWeight) * 2 * Math.PI
-
-    // Draw slice
-    ctx.beginPath()
-    ctx.arc(centerX, centerY, radius, currentAngle, currentAngle + sliceAngle)
-    ctx.lineTo(centerX, centerY)
-    ctx.fillStyle = `hsl(${(idx * 360) / enabled.length}, 70%, 60%)`
-    ctx.fill()
-    ctx.strokeStyle = '#fff'
-    ctx.lineWidth = 2
-    ctx.stroke()
-
-    // Draw text
-    const textAngle = currentAngle + sliceAngle / 2
-    ctx.save()
-    ctx.translate(centerX, centerY)
-    ctx.rotate(textAngle)
-    ctx.textAlign = 'right'
-    ctx.fillStyle = '#fff'
-    ctx.font = 'bold 14px sans-serif'
-    ctx.fillText(opt.text, radius - 20, 5)
-    ctx.restore()
-
-    currentAngle += sliceAngle
-  })
 }
 
 function getSelectedOption(angle) {
