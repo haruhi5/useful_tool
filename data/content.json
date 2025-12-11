@@ -1,0 +1,45 @@
+{
+  "site": {
+    "title": "My Workspace",
+    "subtitle": "Minimal personal toolkit",
+    "theme": "dark"
+  },
+  "posts": [
+    {
+      "title": "Spin Wheel — Weights + No-Repeat",
+      "desc": "Switchable topics · weighted selection · no-repeat N · export/import · pure HTML/JS",
+      "url": "tags/tools/spin_wheel_pure_topics.html",
+      "tags": [
+        "tools",
+        "app"
+      ],
+      "date": "2025-08-28"
+    },
+    {
+      "title": "Multi-Currency Converter",
+      "desc": "Convert between 18+ currencies including USD, EUR, GBP, JPY, CNY, SGD and more · Real-time rates",
+      "url": "tags/tools/currency.html",
+      "tags": [
+        "tools",
+        "utility"
+      ],
+      "date": "2025-08-28"
+    },
+    {
+      "title": "Hiking Safety Guide (CN)",
+      "desc": "One-page checklist + detailed safety tips; printable HTML and DOCX.",
+      "url": "tags/hiking/Hiking_Safety_Guide_CN.html",
+      "tags": [
+        "hiking",
+        "guide"
+      ],
+      "date": "2025-08-28",
+      "downloads": [
+        {
+          "label": "DOCX",
+          "url": "downloads/Hiking_Safety_Guide_CN.docx"
+        }
+      ]
+    }
+  ]
+}
