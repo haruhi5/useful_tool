@@ -1,0 +1,18 @@
+{
+  "name": "useful-tools",
+  "version": "1.0.0",
+  "description": "Personal toolkit with modular tool architecture",
+  "private": true,
+  "scripts": {
+    "create": "node create.mjs",
+    "prepare": "husky install",
+    "test": "npm run test --workspaces --if-present"
+  },
+  "devDependencies": {
+    "husky": "^8.0.0"
+  },
+  "workspaces": [
+    "backend",
+    "frontend"
+  ]
+}

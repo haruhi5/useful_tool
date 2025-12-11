@@ -1,0 +1,36 @@
+#!/bin/sh
+# Pre-commit hook - runs tests before allowing commit
+# Prevents committing broken code
+
+echo "🧪 Running tests before commit..."
+echo ""
+
+# Test backend if backend files changed
+if git diff --cached --name-only | grep -q "^backend/"; then
+  echo "📦 Testing backend..."
+  cd backend
+  npm test
+  if [ $? -ne 0 ]; then
+    echo "❌ Backend tests failed! Commit blocked."
+    exit 1
+  fi
+  cd ..
+  echo "✅ Backend tests passed"
+  echo ""
+fi
+
+# Test frontend if frontend files changed
+if git diff --cached --name-only | grep -q "^frontend/"; then
+  echo "💻 Testing frontend..."
+  cd frontend
+  npm test
+  if [ $? -ne 0 ]; then
+    echo "❌ Frontend tests failed! Commit blocked."
+    exit 1
+  fi
+  cd ..
+  echo "✅ Frontend tests passed"
+  echo ""
+fi
+
+echo "✨ All tests passed! Commit allowed."

@@ -1,0 +1,23 @@
+{
+  "name": "useful-tool-backend",
+  "version": "1.0.0",
+  "description": "Backend API server for useful tools",
+  "main": "index.js",
+  "type": "module",
+  "scripts": {
+    "start": "node index.js",
+    "dev": "node --watch index.js",
+    "test": "vitest"
+  },
+  "keywords": ["tools", "api"],
+  "author": "",
+  "license": "MIT",
+  "dependencies": {
+    "express": "^4.18.2",
+    "cors": "^2.8.5",
+    "dotenv": "^16.3.1"
+  },
+  "devDependencies": {
+    "vitest": "^1.0.0"
+  }
+}

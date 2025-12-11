@@ -1,0 +1,119 @@
+:root {
+  --bg: #0b1020;
+  --fg: #e6ebff;
+  --muted: #9fb0d3;
+  --card: #0f172a;
+  --border: rgba(255, 255, 255, 0.08);
+  --brand: #7aa2ff;
+  --brand2: #7c3aed;
+  --pill: #a5b4fc;
+  --hover: rgba(122, 162, 255, 0.18);
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html, body {
+  margin: 0;
+  padding: 0;
+  background: var(--bg);
+  color: var(--fg);
+  font: 16px/1.6 ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial;
+}
+
+.app {
+  min-height: 100dvh;
+}
+
+.header {
+  padding: 2rem 1rem;
+  text-align: center;
+  border-bottom: 1px solid var(--border);
+  background: linear-gradient(135deg, rgba(122, 162, 255, 0.1) 0%, rgba(124, 58, 237, 0.1) 100%);
+}
+
+.header h1 {
+  margin: 0 0 0.5rem 0;
+  font-size: 2rem;
+}
+
+.header p {
+  margin: 0;
+  color: var(--muted);
+}
+
+.container {
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 2rem 1rem;
+}
+
+.tools-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: 1.5rem;
+  margin-top: 2rem;
+}
+
+.tool-card {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 1.5rem;
+  transition: all 0.3s ease;
+}
+
+.tool-card:hover {
+  background: rgba(122, 162, 255, 0.05);
+  border-color: var(--brand);
+  transform: translateY(-2px);
+}
+
+.tool-card h3 {
+  margin: 0 0 0.5rem 0;
+  color: var(--brand);
+}
+
+.tag {
+  display: inline-block;
+  background: rgba(122, 162, 255, 0.15);
+  color: var(--pill);
+  padding: 0.25rem 0.75rem;
+  border-radius: 20px;
+  font-size: 0.85rem;
+  margin-bottom: 1rem;
+}
+
+.tool-card button {
+  width: 100%;
+  padding: 0.75rem;
+  background: var(--brand);
+  color: white;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+  font-weight: 500;
+  transition: background 0.2s;
+}
+
+.tool-card button:hover {
+  background: var(--brand2);
+}
+
+.error {
+  color: #ff6b6b;
+  padding: 1rem;
+  background: rgba(255, 107, 107, 0.1);
+  border-radius: 6px;
+}
+
+@media (max-width: 768px) {
+  .tools-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .header h1 {
+    font-size: 1.5rem;
+  }
+}
