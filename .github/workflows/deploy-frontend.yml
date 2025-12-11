@@ -5,6 +5,7 @@ on:
     branches: [main]
     paths:
       - 'frontend/**'
+      - 'tools/**'
       - '.github/workflows/deploy-frontend.yml'
   pull_request:
     branches: [main]
