@@ -88,6 +88,7 @@ const isSpinning = ref(false)
 const result = ref('')
 const recentN = ref(3)
 const lastResults = ref([])
+const currentAngle = ref(0)
 
 const options = ref([
   { text: 'Option 1', weight: 1, enabled: true },
@@ -184,9 +185,9 @@ function spin() {
   const targetAngle = seg.start + margin + Math.random() * (span - 2 * margin)
   
   // Calculate total rotation: pointer starts at top (π/2), needs to reach targetAngle
-  const currentAngle = 0
   const desired = Math.PI * 1.5 - targetAngle
-  const base = ((desired - currentAngle) % (Math.PI * 2) + Math.PI * 2) % (Math.PI * 2)
+  const normalizeAngle = (a) => ((a % (Math.PI * 2)) + Math.PI * 2) % (Math.PI * 2)
+  const base = normalizeAngle(desired - currentAngle.value)
   const deltaTheta = base + (minTurns + extraTurns) * Math.PI * 2
   
   // Physics: Δθ = 0.5 α T² => α = 2Δθ/T²
@@ -194,7 +195,7 @@ function spin() {
   const omega0 = alpha * T
   
   const startTime = performance.now ? performance.now() : Date.now()
-  const startAngle = currentAngle
+  const startAngle = currentAngle.value
 
   function animate(now) {
     now = (typeof now === 'number') ? now : (performance.now ? performance.now() : Date.now())
@@ -202,10 +203,10 @@ function spin() {
     
     if (elapsed >= T) {
       // Final snap
-      const finalAngle = startAngle + deltaTheta
-      drawWheelRotated(finalAngle)
+      currentAngle.value = startAngle + deltaTheta
+      drawWheelRotated(currentAngle.value)
       isSpinning.value = false
-      const selectedIdx = getSelectedOption(finalAngle)
+      const selectedIdx = getSelectedOption(currentAngle.value)
       result.value = enabledOptions.value[selectedIdx].text
       lastResults.value.push(selectedIdx)
       updateURL()

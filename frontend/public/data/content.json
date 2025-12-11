@@ -16,6 +16,16 @@
       "date": "2025-08-28"
     },
     {
+      "title": "Currency Converter",
+      "desc": "USD / SGD / CNY real-time exchange rates converter",
+      "url": "tags/tools/currency.html",
+      "tags": [
+        "tools",
+        "utility"
+      ],
+      "date": "2025-08-28"
+    },
+    {
       "title": "Hiking Safety Guide (CN)",
       "desc": "One-page checklist + detailed safety tips; printable HTML and DOCX.",
       "url": "tags/hiking/Hiking_Safety_Guide_CN.html",
