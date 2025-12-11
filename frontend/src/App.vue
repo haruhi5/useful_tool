@@ -3,13 +3,18 @@
     <aside class="side" :class="{ open: sidebarOpen }" id="side">
       <div class="navTitle">Categories</div>
       <div id="catContainer">
-        <details v-for="tag in sortedTags" :key="tag" @toggle="onTagToggle(tag, $event)">
+        <details v-for="tag in sortedTags" :key="tag">
           <summary>
             # {{ tag }}
             <span class="count">{{ TAGS[tag]?.length || 0 }}</span>
           </summary>
           <div class="tagLinks">
-            <a v-for="post in TAGS[tag]" :key="post.url" :href="post.url">
+            <a 
+              v-for="post in TAGS[tag]" 
+              :key="post.url" 
+              href="#"
+              @click.prevent="openTool(post)"
+            >
               {{ post.title }}
             </a>
           </div>
@@ -36,7 +41,7 @@
       </div>
 
       <main class="main">
-        <div class="grid" id="grid">
+        <div v-if="!selectedTool" class="grid" id="grid">
           <section v-for="post in filteredPosts" :key="post.url" class="card third">
             <div class="tags">
               <span v-for="tag in post.tags" :key="tag" class="pill">#{{ tag }}</span>
@@ -44,7 +49,7 @@
             <h2>{{ post.title }}</h2>
             <p>{{ post.desc || '' }}</p>
             <div class="actions">
-              <a :href="post.url" class="btn">Open</a>
+              <a href="#" @click.prevent="openTool(post)" class="btn">Open</a>
               <a
                 v-for="download in post.downloads"
                 :key="download.url"
@@ -59,6 +64,14 @@
             <p style="margin: 0; color: var(--muted)">No posts match your filter.</p>
           </div>
         </div>
+
+        <div v-else class="tool-viewer">
+          <button @click="selectedTool = null" class="back-btn">← Back to Tools</button>
+          <SpinWheel v-if="selectedTool === 'spin-wheel'" />
+          <CurrencyConverter v-if="selectedTool === 'currency'" />
+          <HikingGuide v-if="selectedTool === 'hiking'" />
+        </div>
+
         <footer>© <span id="year"></span> · Minimal template · Built with Vue 3</footer>
       </main>
     </div>
@@ -67,6 +80,9 @@
 
 <script setup>
 import { ref, computed, onMounted } from 'vue'
+import SpinWheel from '@tools/spin-wheel/index.vue'
+import CurrencyConverter from '@tools/currency-converter/index.vue'
+import HikingGuide from '@tools/hiking-guide/index.vue'
 
 const siteTitle = ref('My Workspace')
 const siteSubtitle = ref('Minimal personal toolkit')
@@ -75,6 +91,7 @@ const TAGS = ref({})
 const sidebarOpen = ref(false)
 const searchQuery = ref('')
 const theme = ref('dark')
+const selectedTool = ref(null)
 
 const sortedTags = computed(() => {
   return Object.keys(TAGS.value).sort((a, b) => a.localeCompare(b))
@@ -100,10 +117,21 @@ const filteredPosts = computed(() => {
   return posts
 })
 
-function onTagToggle(tag, event) {
-  // Filter posts by tag when summary is clicked
-  if (event.target.tagName === 'SUMMARY') {
-    event.preventDefault()
+function openTool(post) {
+  // Map posts to tool components
+  const title = post.title.toLowerCase()
+  
+  if (title.includes('spin wheel')) {
+    selectedTool.value = 'spin-wheel'
+  } else if (title.includes('currency')) {
+    selectedTool.value = 'currency'
+  } else if (title.includes('hiking')) {
+    selectedTool.value = 'hiking'
+  } else {
+    // Fallback: try to open the original URL if it's not a tool
+    if (post.url) {
+      window.location.href = post.url
+    }
   }
 }
 
@@ -405,6 +433,31 @@ details[open] summary {
   display: flex;
   gap: 10px;
   flex-wrap: wrap;
+}
+
+.tool-viewer {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  padding: 18px;
+  margin-bottom: 18px;
+}
+
+.back-btn {
+  padding: 10px 16px;
+  background: var(--brand);
+  color: white;
+  border: none;
+  border-radius: 10px;
+  cursor: pointer;
+  font-weight: 700;
+  margin-bottom: 1rem;
+  transition: all 0.2s;
+}
+
+.back-btn:hover {
+  background: var(--brand2);
+  transform: translateX(-4px);
 }
 
 footer {
