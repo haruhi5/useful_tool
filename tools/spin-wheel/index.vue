@@ -156,32 +156,116 @@ function spin() {
   if (isSpinning.value || enabledOptions.value.length === 0) return
 
   isSpinning.value = true
-  const spinDuration = 4000
-  const startAngle = Math.random() * Math.PI * 2
-  const spinAngle = Math.random() * Math.PI * 2 + Math.PI * 4
+  
+  // Physics-based approach: ensure several full rotations
+  const minTurns = 3
+  const extraTurns = Math.floor(Math.random() * 3)
+  
+  // Duration: 2.8s to 4.5s
+  const spinDuration = (2800 + Math.random() * 1700)
+  const T = spinDuration / 1000 // seconds
+  
+  // Find target segment and calculate rotation needed
+  const enabled = enabledOptions.value
+  const totalWeight = enabled.reduce((sum, o) => sum + o.weight, 0)
+  let segmentStart = 0
+  const segments = enabled.map((opt) => {
+    const segmentAngle = (opt.weight / totalWeight) * 2 * Math.PI
+    const start = segmentStart
+    segmentStart += segmentAngle
+    return { start, angle: segmentAngle, text: opt.text }
+  })
+  
+  // Random target in a random segment
+  const targetSegIdx = Math.floor(Math.random() * segments.length)
+  const seg = segments[targetSegIdx]
+  const span = seg.angle
+  const margin = Math.min(0.2, span * 0.2)
+  const targetAngle = seg.start + margin + Math.random() * (span - 2 * margin)
+  
+  // Calculate total rotation: pointer starts at top (π/2), needs to reach targetAngle
+  const currentAngle = 0
+  const desired = Math.PI * 1.5 - targetAngle
+  const base = ((desired - currentAngle) % (Math.PI * 2) + Math.PI * 2) % (Math.PI * 2)
+  const deltaTheta = base + (minTurns + extraTurns) * Math.PI * 2
+  
+  // Physics: Δθ = 0.5 α T² => α = 2Δθ/T²
+  const alpha = (2 * deltaTheta) / (T * T)
+  const omega0 = alpha * T
+  
+  const startTime = performance.now ? performance.now() : Date.now()
+  const startAngle = currentAngle
 
-  const startTime = Date.now()
-
-  function animate() {
-    const elapsed = Date.now() - startTime
-    const progress = Math.min(elapsed / spinDuration, 1)
-
-    // Ease out
-    const easeProgress = 1 - Math.pow(1 - progress, 3)
-    const currentAngle = startAngle + spinAngle * easeProgress
-
-    if (progress < 1) {
-      requestAnimationFrame(animate)
-    } else {
+  function animate(now) {
+    now = (typeof now === 'number') ? now : (performance.now ? performance.now() : Date.now())
+    const elapsed = (now - startTime) / 1000 // seconds
+    
+    if (elapsed >= T) {
+      // Final snap
+      const finalAngle = startAngle + deltaTheta
+      drawWheelRotated(finalAngle)
       isSpinning.value = false
-      const selectedIdx = getSelectedOption(currentAngle)
+      const selectedIdx = getSelectedOption(finalAngle)
       result.value = enabledOptions.value[selectedIdx].text
       lastResults.value.push(selectedIdx)
       updateURL()
+      return
     }
+    
+    // Kinematic equation: θ = θ₀ + ω₀t - 0.5αt²
+    const theta = startAngle + omega0 * elapsed - 0.5 * alpha * elapsed * elapsed
+    drawWheelRotated(theta)
+    requestAnimationFrame(animate)
   }
 
-  animate()
+  requestAnimationFrame(animate)
+}
+
+function drawWheelRotated(rotationAngle) {
+  const canvas = wheelCanvas.value
+  if (!canvas) return
+
+  const ctx = canvas.getContext('2d')
+  const centerX = canvas.width / 2
+  const centerY = canvas.height / 2
+  const radius = Math.min(centerX, centerY) - 20
+
+  // Clear
+  ctx.fillStyle = '#f5f5f5'
+  ctx.fillRect(0, 0, canvas.width, canvas.height)
+
+  const enabled = enabledOptions.value
+  if (enabled.length === 0) return
+
+  const totalWeight = enabled.reduce((sum, o) => sum + o.weight, 0)
+  let currentAngle = -rotationAngle // Apply rotation offset
+
+  enabled.forEach((opt, idx) => {
+    const sliceAngle = (opt.weight / totalWeight) * 2 * Math.PI
+
+    // Draw slice
+    ctx.beginPath()
+    ctx.arc(centerX, centerY, radius, currentAngle, currentAngle + sliceAngle)
+    ctx.lineTo(centerX, centerY)
+    ctx.fillStyle = `hsl(${(idx * 360) / enabled.length}, 70%, 60%)`
+    ctx.fill()
+    ctx.strokeStyle = '#fff'
+    ctx.lineWidth = 2
+    ctx.stroke()
+
+    // Draw text
+    const textAngle = currentAngle + sliceAngle / 2
+    ctx.save()
+    ctx.translate(centerX, centerY)
+    ctx.rotate(textAngle)
+    ctx.textAlign = 'right'
+    ctx.fillStyle = '#fff'
+    ctx.font = 'bold 14px sans-serif'
+    ctx.fillText(opt.text, radius - 20, 5)
+    ctx.restore()
+
+    currentAngle += sliceAngle
+  })
 }
 
 function getSelectedOption(angle) {
