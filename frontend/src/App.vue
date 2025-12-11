@@ -38,9 +38,9 @@
 
 <script setup>
 import { ref } from 'vue'
-import SpinWheel from '../../tools/spin-wheel/index.vue'
-import CurrencyConverter from '../../tools/currency-converter/index.vue'
-import HikingGuide from '../../tools/hiking-guide/index.vue'
+import SpinWheel from '../../../tools/spin-wheel/index.vue'
+import CurrencyConverter from '../../../tools/currency-converter/index.vue'
+import HikingGuide from '../../../tools/hiking-guide/index.vue'
 
 const selectedTool = ref(null)
 </script>
